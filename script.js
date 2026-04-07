@@ -1,0 +1,708 @@
+// ── 캡처 기능 ──
+document.getElementById('screenshotBtn').addEventListener('click', () => {
+    const target = document.querySelector('.window');
+    const originalBorder = target.style.border;
+    target.style.border = 'none';
+
+    html2canvas(target, {
+        backgroundColor: '#FAF4E8',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        allowTaint: true
+    }).then(c => {
+        target.style.border = originalBorder;
+        const defaultName = 'capture_' + Date.now();
+        const fileName = prompt('파일명을 입력하세요', defaultName);
+        if (fileName === null) return;
+        const link = document.createElement('a');
+        link.download = (fileName || defaultName) + '.png';
+        link.href = c.toDataURL('image/png');
+        link.click();
+    }).catch(() => {
+        target.style.border = originalBorder;
+        alert('캡처에 실패했습니다. 브라우저를 확인해주세요.');
+    });
+});
+
+// ── 초기화 및 이벤트 리스너 ──
+const audio = document.getElementById('audioPlayer');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const progressThumb = document.getElementById('progressThumb');
+const timeCurrent = document.getElementById('timeCurrent');
+const timeTotal = document.getElementById('timeTotal');
+const btnPlay = document.getElementById('btnPlay');
+const playIcon = document.getElementById('playIcon');
+const btnBack = document.getElementById('btnBack');
+const btnFwd = document.getElementById('btnFwd');
+const titleText = document.getElementById('titleText');
+const audioInput = document.getElementById('audioInput');
+const audioIcon = document.getElementById('audioIcon');
+const captureIcon = document.getElementById('captureIcon');
+
+// ── 프롬프트 ──
+const whisperPrompt = 'Romana, Zagreus, Charley, Rassilon, K9, K-9';
+const claudeSystemPrompt = `너는 닥터후 오디오 드라마 자막 번역기야. 영어를 한국어로 번역해.
+- 캐릭터의 성격과 관계에 맞는 자연스러운 구어체 한국어
+- 주인공으로 나오는 닥터와 컴패니언의 성격을 반영한 번역
+- 닥터는 컴패니언에게 반말 사용, 그 외의 관계에서는 상황에 적절하게
+- 컴패니언은 특수한 상황이 아니면 닥터에게 존댓말을 사용
+- 감정이 실린 대사는 직역보다 감정 전달 우선
+- 조연끼리의 위계와 관계도 고려해서 반말과 존댓말을 적절하게 사용
+- 빌런 캐릭터는 빌런에게 어울리는 말투를 사용
+- 영국식 유머와 말장난은 한국어에서도 재치있게 살릴 것
+- 고유명사(타디스, 소닉 드라이버, 달렉, 마스터 등)는 그대로 유지
+- 한 번호에 여러 화자의 대사가 있으면 / 로 구분해서 번역
+- 입력된 번호 하나당 번역 결과도 정확히 하나. 여러 번호를 합치거나 하나를 쪼개지 말 것
+- 번호|번역 형식 외의 텍스트 출력 금지`;
+
+// ── Whisper STT ──
+async function transcribeTrack(file, offsetSec) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', 'whisper-1');
+    formData.append('response_format', 'verbose_json');
+    formData.append('timestamp_granularities[]', 'segment');
+    formData.append('timestamp_granularities[]', 'word');
+    formData.append('language', 'en');
+    if (whisperPrompt) formData.append('prompt', whisperPrompt);
+
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + openaiKey },
+        body: formData
+    });
+    const data = await res.json();
+
+    if (!data.segments) {
+        console.error('STT 실패:', data);
+        return [];
+    }
+
+    const raw = data.segments
+        .filter(seg => {
+            // no_speech 필터 (느슨하게 0.8)
+            if ((seg.no_speech_prob || 0) >= 0.8) {
+                console.log('no_speech 필터:', (seg.no_speech_prob || 0).toFixed(2), seg.text);
+                return false;
+            }
+            // 30초 이상 segment 필터
+            if (seg.end - seg.start > 30) {
+                console.log('긴 segment 필터:', (seg.end - seg.start).toFixed(1) + '초', seg.text);
+                return false;
+            }
+            return true;
+        })
+        .map(seg => {
+            // word 타임스탬프로 싱크 보정
+            let start = seg.start + offsetSec;
+            let end = seg.end + offsetSec;
+            if (seg.words && seg.words.length > 0) {
+                start = seg.words[0].start + offsetSec;
+                end = seg.words[seg.words.length - 1].end + offsetSec;
+            }
+            return { start, end, text: seg.text.trim() };
+        });
+
+    // 중복/밀림 필터
+    const filtered = [];
+    for (let i = 0; i < raw.length; i++) {
+        const seg = raw[i];
+        if (!seg.text) continue;
+        if (seg.end <= seg.start) continue;
+        if (filtered.length > 0) {
+            const prev = filtered[filtered.length - 1];
+            if (seg.text === prev.text && Math.abs(seg.start - prev.start) < 2) continue;
+            if (seg.start < prev.end - 0.5) continue;
+            if (seg.text === prev.text && seg.start < prev.end + 5) continue;
+        }
+        filtered.push(seg);
+    }
+
+    filtered.forEach(seg => {
+        seg.text = seg.text
+            .replace(/\bcanine\b/gi, 'K9')
+            .replace(/\bK-9\b/g, 'K9');
+    });
+
+    return filtered;
+}
+
+// ── 여러 트랙 처리 ──
+async function transcribeAll(files) {
+    let allSubs = [];
+    let offset = 0;
+
+    for (let i = 0; i < files.length; i++) {
+        setTitle('STT ' + (i + 1) + '/' + files.length + '...');
+        const subs = await transcribeTrack(files[i], offset);
+        allSubs = allSubs.concat(subs);
+
+        // 이 트랙의 실제 길이를 구해서 다음 오프셋에 반영
+        const duration = await getAudioDuration(files[i]);
+        offset += duration;
+    }
+
+    setTitle('STT COMPLETE');
+    return allSubs;
+}
+
+// ── 오디오 길이 구하기 ──
+function getAudioDuration(file) {
+    return new Promise(resolve => {
+        const tmpAudio = new Audio();
+        tmpAudio.src = URL.createObjectURL(file);
+        tmpAudio.addEventListener('loadedmetadata', () => {
+            resolve(tmpAudio.duration);
+            URL.revokeObjectURL(tmpAudio.src);
+        });
+    });
+}
+
+// ── Claude 번역 ──
+async function translateSubtitles(subs) {
+    const batchSize = 25;
+    for (let i = 0; i < subs.length; i += batchSize) {
+        const batch = subs.slice(i, i + batchSize);
+        const numberedLines = batch.map((s, j) => (i + j + 1) + '|' + s.text).join('\n---\n');
+        const expectedCount = batch.length;
+
+        setTitle('번역 중 ' + (i + 1) + '-' + Math.min(i + batchSize, subs.length) + '/' + subs.length + '...');
+
+        let attempts = 0;
+        let success = false;
+
+        while (attempts < 3 && !success) {
+            attempts++;
+            try {
+                const userMsg = attempts === 1
+                    ? '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n총 ' + expectedCount + '개 번호를 빠짐없이 출력할 것.\n\n' + numberedLines
+                    : '다음 자막을 한국어로 번역해.\n\n⚠️ 중요: 이전 시도에서 번호가 밀리는 오류가 발생함.\n- 입력 번호와 출력 번호가 반드시 1:1 대응해야 함\n- 예시: 입력이 5|Hello 이면 출력도 반드시 5|안녕\n- 두 줄을 합쳐서 번역하지 말 것\n- 총 ' + expectedCount + '개 전부 출력할 것\n- 번호|번역 형식으로만 응답\n\n' + numberedLines;
+
+                const res = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': anthropicKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 4096,
+                        system: claudeSystemPrompt,
+                        messages: [{ role: 'user', content: userMsg }]
+                    })
+                });
+
+                const data = await res.json();
+                const text = data.content[0].text;
+                const parsed = [];
+                text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
+                    const match = line.match(/^(\d+)\|(.+)/);
+                    if (match) {
+                        const idx = parseInt(match[1]) - 1;
+                        if (idx >= 0 && idx < subs.length) {
+                            const translated = match[2].trim();
+                            if (translated.length > subs[idx].text.length * 3) {
+                                console.warn('합쳐진 번역 의심:', idx + 1, translated);
+                            } else {
+                                subs[idx].kr = translated;
+                                parsed.push(idx);
+                            }
+                        }
+                    }
+                });
+
+                // 개수 불일치 = 밀림 가능성
+                if (parsed.length !== expectedCount && attempts < 3) {
+                    console.warn('개수 불일치:', parsed.length + '/' + expectedCount, '재시도');
+                    batch.forEach((_, j) => { delete subs[i + j].kr; });
+                    continue;
+                }
+
+                const batchIndices = batch.map((_, j) => i + j);
+                const missing = batchIndices.filter(idx => !parsed.includes(idx));
+
+                if (missing.length === 0) {
+                    success = true;
+                } else if (attempts < 3) {
+                    console.warn('배치 재시도 (누락 ' + missing.length + '개), 시도 ' + (attempts + 1));
+                    batch.forEach((_, j) => { delete subs[i + j].kr; });
+                    continue;
+                } else {
+                    success = true;
+                }
+            } catch (err) {
+                console.error('번역 배치 실패:', i, err);
+                if (attempts >= 3) success = true;
+            }
+        }
+    }
+
+    // 최종 누락분 재시도
+    const missed = subs.filter(s => !s.kr);
+    if (missed.length > 0 && missed.length < 20) {
+        const numberedLines = missed.map(s => (subs.indexOf(s) + 1) + '|' + s.text).join('\n---\n');
+        setTitle('최종 누락분 ' + missed.length + '개 재번역...');
+        try {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': anthropicKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    system: claudeSystemPrompt,
+                    messages: [{
+                        role: 'user',
+                        content: '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n\n' + numberedLines
+                    }]
+                })
+            });
+            const data = await res.json();
+            data.content[0].text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
+                const match = line.match(/^(\d+)\|(.+)/);
+                if (match) {
+                    const idx = parseInt(match[1]) - 1;
+                    if (idx >= 0 && idx < subs.length) subs[idx].kr = match[2].trim();
+                }
+            });
+        } catch (err) { }
+    }
+
+    return subs;
+}
+
+let openaiKey = '';
+let anthropicKey = '';
+
+// ── API 키 입력 ──
+function askApiKeys() {
+    const oKey = prompt('OpenAI API 키를 입력하세요 (Whisper STT용)\n없으면 빈칸으로 넘기세요\n\n키 발급: platform.openai.com/api-keys', openaiKey || '');
+    if (oKey !== null) openaiKey = oKey.trim();
+    const aKey = prompt('Anthropic API 키를 입력하세요 (Claude 번역용)\n없으면 빈칸으로 넘기세요\n\n키 발급: console.anthropic.com/settings/keys', anthropicKey || '');
+    if (aKey !== null) anthropicKey = aKey.trim();
+    const keyIcon = document.querySelector('.key-icon');
+    if (openaiKey || anthropicKey) {
+        keyIcon.style.background = 'var(--light-blue)';
+    } else {
+        keyIcon.style.background = 'transparent';
+    }
+}
+
+askApiKeys();
+
+document.getElementById('keyBtn').addEventListener('click', askApiKeys);
+
+const titleSpan = document.getElementById('titleSpan');
+
+let tracks = [];
+let currentTrack = 0;
+let mergedAudioUrl = null;
+
+function checkMarquee() {
+    const container = titleText;
+    const span = titleSpan;
+    span.style.paddingLeft = '0';
+    container.classList.remove('scrolling');
+    if (span.scrollWidth > container.clientWidth) {
+        span.style.paddingLeft = '40%';
+        container.classList.add('scrolling');
+    }
+}
+
+function setTitle(text) {
+    titleSpan.textContent = text;
+    checkMarquee();
+}
+
+async function mergeAudioFiles(files) {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const buffers = [];
+    for (let i = 0; i < files.length; i++) {
+        setTitle('DECODING TRACK ' + (i + 1) + '/' + files.length + '...');
+        await new Promise(r => setTimeout(r, 50));
+        const arrayBuf = await files[i].arrayBuffer();
+        const decoded = await audioCtx.decodeAudioData(arrayBuf);
+        buffers.push(decoded);
+    }
+    setTitle('MERGING ' + files.length + ' TRACKS...');
+    await new Promise(r => setTimeout(r, 50));
+    const totalLength = buffers.reduce((sum, b) => sum + b.length, 0);
+    const sampleRate = buffers[0].sampleRate;
+    const channels = buffers[0].numberOfChannels;
+    const merged = audioCtx.createBuffer(channels, totalLength, sampleRate);
+    let offset = 0;
+    for (const buf of buffers) {
+        for (let ch = 0; ch < channels; ch++) {
+            merged.getChannelData(ch).set(buf.getChannelData(ch), offset);
+        }
+        offset += buf.length;
+    }
+    audioCtx.close();
+    setTitle('CONVERTING...');
+    await new Promise(r => setTimeout(r, 50));
+    const wavBlob = bufferToWav(merged);
+    return URL.createObjectURL(wavBlob);
+}
+
+// ── AudioBuffer를 WAV Blob으로 변환 ──
+function bufferToWav(buffer) {
+    const numCh = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const length = buffer.length * numCh * 2 + 44;
+    const out = new ArrayBuffer(length);
+    const view = new DataView(out);
+    let pos = 0;
+    function writeStr(s) { for (let i = 0; i < s.length; i++) view.setUint8(pos++, s.charCodeAt(i)); }
+    function writeU32(v) { view.setUint32(pos, v, true); pos += 4; }
+    function writeU16(v) { view.setUint16(pos, v, true); pos += 2; }
+    writeStr('RIFF');
+    writeU32(length - 8);
+    writeStr('WAVE');
+    writeStr('fmt ');
+    writeU32(16);
+    writeU16(1);
+    writeU16(numCh);
+    writeU32(sampleRate);
+    writeU32(sampleRate * numCh * 2);
+    writeU16(numCh * 2);
+    writeU16(16);
+    writeStr('data');
+    writeU32(length - 44);
+    for (let i = 0; i < buffer.length; i++) {
+        for (let ch = 0; ch < numCh; ch++) {
+            let sample = buffer.getChannelData(ch)[i];
+            sample = Math.max(-1, Math.min(1, sample));
+            view.setInt16(pos, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            pos += 2;
+        }
+    }
+    return new Blob([out], { type: 'audio/wav' });
+}
+
+window.addEventListener('resize', checkMarquee);
+checkMarquee();
+
+let isPlaying = false;
+let audioLoaded = false;
+
+function fmt(s) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
+function updateProgress() {
+    if (!audio.duration) return;
+    const pct = (audio.currentTime / audio.duration) * 100;
+    progressFill.style.width = pct + '%';
+    progressThumb.style.left = pct + '%';
+    timeCurrent.textContent = fmt(audio.currentTime);
+}
+
+audioInput.addEventListener('change', async e => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    tracks = files;
+    audioIcon.style.background = 'var(--blue)';
+    const name = files.length > 1
+        ? files[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (files.length - 1) + '트랙'
+        : files[0].name.replace(/\.[^.]+$/, '').toUpperCase();
+    setTitle(name);
+    const cover = document.getElementById('coverImg');
+    jsmediatags.read(files[0], {
+        onSuccess: tag => {
+            const pic = tag.tags.picture;
+            if (pic) {
+                const bytes = new Uint8Array(pic.data);
+                const blob = new Blob([bytes], { type: pic.format });
+                const imgUrl = URL.createObjectURL(blob);
+                cover.style.backgroundImage = 'url(' + imgUrl + ')';
+                cover.style.backgroundSize = 'cover';
+                cover.style.backgroundPosition = 'center';
+                cover.textContent = '';
+            }
+            if (tag.tags.title) {
+                const t = tag.tags.title.toUpperCase();
+                const artist = tag.tags.artist ? ' - ' + tag.tags.artist.toUpperCase() : '';
+                setTitle(t + artist);
+            }
+        },
+        onError: () => { }
+    });
+    if (files.length > 1) {
+        setTitle('MERGING ' + files.length + ' TRACKS...');
+        mergedAudioUrl = await mergeAudioFiles(files);
+        audio.src = mergedAudioUrl;
+        audioLoaded = true;
+        setTitle(name);
+    } else {
+        audio.src = URL.createObjectURL(files[0]);
+        audioLoaded = true;
+    }
+    if (openaiKey && anthropicKey) {
+        let runSTT = true;
+        if (subtitles.length) {
+            runSTT = confirm('이미 자막이 있습니다. 새로 생성할까요?');
+        }
+        if (runSTT) {
+            const subs = await transcribeAll(files);
+            const translated = await translateSubtitles(subs);
+            renderSubtitles(translated);
+            setTitle(name);
+        }
+    }
+});
+
+audio.addEventListener('loadedmetadata', () => {
+    timeTotal.textContent = fmt(audio.duration);
+    timeCurrent.textContent = '0:00';
+});
+
+audio.addEventListener('timeupdate', updateProgress);
+
+audio.addEventListener('ended', () => {
+    isPlaying = false;
+    playIcon.style.cssText = 'width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:14px solid var(--cream);margin-left:3px;';
+});
+
+btnPlay.addEventListener('click', () => {
+    if (!audioLoaded) return;
+    const icon = document.getElementById('playIcon');
+    if (isPlaying) {
+        audio.pause();
+        isPlaying = false;
+        icon.innerHTML = '';
+        icon.style.cssText = 'width:0;height:0;border-top:7px solid transparent;border-bottom:7px solid transparent;border-left:11px solid var(--cream);margin-left:2px;';
+    } else {
+        audio.play();
+        isPlaying = true;
+        icon.style.cssText = 'width:12px;height:14px;display:flex;gap:3px;align-items:stretch;margin:0;border:none;';
+        icon.innerHTML = '<span style="flex:1;background:var(--cream);"></span><span style="flex:1;background:var(--cream);"></span>';
+    }
+});
+
+btnBack.addEventListener('click', () => {
+    if (!audioLoaded) return;
+    audio.currentTime = Math.max(0, audio.currentTime - 10);
+});
+
+btnFwd.addEventListener('click', () => {
+    if (!audioLoaded) return;
+    audio.currentTime = Math.min(audio.duration, audio.currentTime + 10);
+});
+
+progressBar.addEventListener('click', e => {
+    if (!audioLoaded) return;
+    const rect = progressBar.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * audio.duration;
+});
+
+let dragging = false;
+progressThumb.addEventListener('mousedown', e => { if (audioLoaded) dragging = true; e.preventDefault(); });
+window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const rect = progressBar.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = pct * audio.duration;
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+
+document.querySelectorAll('.setting-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+        const group = opt.dataset.group;
+        document.querySelectorAll(`.setting-option[data-group="${group}"]`).forEach(o => o.classList.remove('active'));
+        opt.classList.add('active');
+        if (group === 'speed') {
+            audio.playbackRate = parseFloat(opt.dataset.value);
+        }
+        if (group === 'subtitle') {
+            const mode = opt.dataset.value;
+            document.querySelectorAll('.subtitle-kr').forEach(el => {
+                el.style.display = (mode === 'en') ? 'none' : 'block';
+            });
+            document.querySelectorAll('.subtitle-en').forEach(el => {
+                el.style.display = (mode === 'kr') ? 'none' : 'block';
+            });
+        }
+    });
+});
+
+// ── SRT 파서 ──
+function parseSRT(text) {
+    const blocks = text.trim().replace(/\r\n/g, '\n').split('\n\n');
+    return blocks.map(block => {
+        const lines = block.split('\n');
+        if (lines.length < 3) return null;
+        const times = lines[1].split(' --> ');
+        const textLines = lines.slice(2);
+        if (textLines.length >= 2) {
+            return {
+                start: srtTimeToSec(times[0]),
+                end: srtTimeToSec(times[1]),
+                text: textLines[0],
+                kr: textLines[1]
+            };
+        } else {
+            return {
+                start: srtTimeToSec(times[0]),
+                end: srtTimeToSec(times[1]),
+                text: textLines[0]
+            };
+        }
+    }).filter(Boolean);
+}
+
+function srtTimeToSec(str) {
+    const [h, m, rest] = str.trim().split(':');
+    const [s, ms] = rest.split(',');
+    return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s) + parseInt(ms) / 1000;
+}
+
+// ── 자막 렌더링 ──
+let subtitles = [];
+
+function renderSubtitles(subs) {
+    subtitles = subs;
+    const area = document.querySelector('.subtitle-area');
+    area.innerHTML = '';
+    area.style.justifyContent = '';
+    const topSpacer = document.createElement('div');
+    topSpacer.style.minHeight = '50%';
+    area.appendChild(topSpacer);
+
+    subs.forEach((sub, i) => {
+        const line = document.createElement('div');
+        line.className = 'subtitle-line';
+        line.dataset.index = i;
+
+        const en = document.createElement('div');
+        en.className = 'subtitle-en';
+        en.textContent = sub.text;
+
+        const kr = document.createElement('div');
+        kr.className = 'subtitle-kr';
+        kr.textContent = sub.kr || '';
+
+        line.appendChild(kr);
+        line.appendChild(en);
+
+        // 클릭하면 해당 시간으로 이동
+        line.addEventListener('click', () => {
+            if (audioLoaded) {
+                audio.currentTime = sub.start;
+            }
+        });
+
+        area.appendChild(line);
+    });
+
+    const bottomSpacer = document.createElement('div');
+    bottomSpacer.style.minHeight = '50%';
+    area.appendChild(bottomSpacer);
+
+    // 현재 자막 표시 설정 적용
+    const mode = document.querySelector('.setting-option[data-group="subtitle"].active').dataset.value;
+    area.querySelectorAll('.subtitle-kr').forEach(el => {
+        el.style.display = (mode === 'en') ? 'none' : 'block';
+    });
+    area.querySelectorAll('.subtitle-en').forEach(el => {
+        el.style.display = (mode === 'kr') ? 'none' : 'block';
+    });
+
+    // 첫 번째 줄을 중앙으로
+    const firstLine = area.querySelector('.subtitle-line');
+    if (firstLine) {
+        firstLine.classList.add('active');
+        const offset = firstLine.offsetTop - (area.clientHeight / 2) + (firstLine.clientHeight / 2);
+        area.scrollTo({ top: offset });
+    }
+}
+
+// ── 타임싱크 ──
+let lastActiveIndex = -1;
+
+function syncSubtitles() {
+    if (!subtitles.length) return;
+    const t = audio.currentTime;
+    let activeIndex = -1;
+
+    for (let i = 0; i < subtitles.length; i++) {
+        if (t >= subtitles[i].start && t < subtitles[i].end) {
+            activeIndex = i;
+            break;
+        }
+    }
+
+    if (activeIndex === lastActiveIndex) return;
+    lastActiveIndex = activeIndex;
+
+    const area = document.querySelector('.subtitle-area');
+    area.querySelectorAll('.subtitle-line').forEach(el => el.classList.remove('active'));
+
+    if (activeIndex >= 0) {
+        const activeLine = area.querySelector(`.subtitle-line[data-index="${activeIndex}"]`);
+        activeLine.classList.add('active');
+        const areaRect = area.getBoundingClientRect();
+        const lineRect = activeLine.getBoundingClientRect();
+        const offset = lineRect.top - areaRect.top + area.scrollTop - (area.clientHeight / 2) + (activeLine.clientHeight / 2);
+        area.scrollTo({ top: offset, behavior: 'smooth' });
+    }
+}
+
+function syncLoop() {
+    syncSubtitles();
+    requestAnimationFrame(syncLoop);
+}
+requestAnimationFrame(syncLoop);
+
+// ── SRT 내보내기 ──
+document.getElementById('exportSrtBtn').addEventListener('click', () => {
+    if (!subtitles.length) return;
+    let srt = '';
+    subtitles.forEach((sub, i) => {
+        srt += (i + 1) + '\n';
+        srt += secToSrtTime(sub.start) + ' --> ' + secToSrtTime(sub.end) + '\n';
+        srt += sub.text + '\n';
+        if (sub.kr) srt += sub.kr + '\n';
+        srt += '\n';
+    });
+    const blob = new Blob([srt], { type: 'text/plain' });
+    const defaultName = 'subtitles_' + Date.now();
+    const fileName = prompt('파일명을 입력하세요', defaultName);
+    if (fileName === null) return;
+    const link = document.createElement('a');
+    link.download = (fileName || defaultName) + '.srt';
+    link.href = URL.createObjectURL(blob);
+    link.click();
+});
+
+function secToSrtTime(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    const ms = Math.round((sec % 1) * 1000);
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + ',' + String(ms).padStart(3, '0');
+}
+
+// ── SRT 파일 로드 ──
+document.getElementById('srtInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    document.getElementById('srtIcon').style.background = 'var(--light-blue)';
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const subs = parseSRT(ev.target.result);
+        renderSubtitles(subs);
+    };
+    reader.readAsText(file);
+});
