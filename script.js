@@ -94,6 +94,13 @@ async function transcribeTrack(file, offsetSec) {
         headers: { 'Authorization': 'Bearer ' + openaiKey },
         body: formData
     });
+
+    // 🚨 응답이 정상이 아니면 강제로 에러 터뜨리기!
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`OpenAI STT 에러 (${res.status}): ${errData.error?.message || '키가 틀렸거나 요금이 부족합니다.'}`);
+    }
+
     const data = await res.json();
 
     if (!data.segments) {
@@ -226,6 +233,12 @@ async function translateSubtitles(subs) {
                     })
                 });
 
+                // 🚨 API 에러 감지!
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(`Anthropic 에러 (${res.status}): ${errData.error?.message || '키 오류 또는 문제 발생'}`);
+                }
+
                 const data = await res.json();
                 const text = data.content[0].text;
                 const parsed = [];
@@ -265,6 +278,13 @@ async function translateSubtitles(subs) {
                 }
             } catch (err) {
                 console.error('번역 배치 실패:', i, err);
+                // 🚨 1. 키가 틀렸거나 요금이 없는 '치명적 에러' (401, 403)
+                // -> 어차피 계속해봤자 안 되니까 즉시 파업! (이땐 결제 전이라 토큰 안 깎임)
+                if (err.message.includes('401') || err.message.includes('403') || err.message.includes('에러')) {
+                    throw err; 
+                }
+                // 🌟 2. Claude가 양식을 안 지키거나 통신이 일시적으로 끊긴 '단순 에러'
+                // -> 토큰 낭비를 막기 위해 3번 시도 후 '스킵'하고 다음 대사로 진행!
                 if (attempts >= 3) success = true;
             }
         }
@@ -320,23 +340,6 @@ async function translateSubtitles(subs) {
 let openaiKey = '';
 let anthropicKey = '';
 
-// ── API 키 입력 ──
-// function askApiKeys() {
-//     const oKey = prompt('OpenAI API 키를 입력하세요 (Whisper STT용)\n없으면 빈칸으로 넘기세요\n\n키 발급: platform.openai.com/api-keys', openaiKey || '');
-//     if (oKey !== null) openaiKey = oKey.trim();
-//     const aKey = prompt('Anthropic API 키를 입력하세요 (Claude 번역용)\n없으면 빈칸으로 넘기세요\n\n키 발급: console.anthropic.com/settings/keys', anthropicKey || '');
-//     if (aKey !== null) anthropicKey = aKey.trim();
-//     const keyIcon = document.querySelector('.key-icon');
-//     if (openaiKey || anthropicKey) {
-//         keyIcon.style.background = 'var(--light-blue)';
-//     } else {
-//         keyIcon.style.background = 'transparent';
-//     }
-// }
-
-// askApiKeys();
-
-// document.getElementById('keyBtn').addEventListener('click', askApiKeys);
 // ── 커스텀 API 키 모달 로직 ──
 const apiModal = document.getElementById('apiModal');
 const openaiInput = document.getElementById('openaiInput');
@@ -886,6 +889,7 @@ function updateWaitingMessage() {
     } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
         // 오디오만 있고 키가 없을 때
         waitingKr.textContent = "오디오 스캔 완료. \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
+        // TODO: 키 입력 문구 변경 필요! api키가 필수가 아님!!
         waitingEn.textContent = "Audio scanned. Please enter API keys.";
         waitingLine.style.opacity = '0.5';
     } else if (!audioLoaded && (openaiKey && anthropicKey)) {
