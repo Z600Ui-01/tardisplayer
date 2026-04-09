@@ -380,6 +380,7 @@ btnConfirmApi.addEventListener('click', () => {
     }
     
     closeApiModal();
+    updateWaitingMessage();
 });
 
 const titleSpan = document.getElementById('titleSpan');
@@ -525,10 +526,12 @@ audioInput.addEventListener('change', async e => {
         mergedAudioUrl = await mergeAudioFiles(files);
         audio.src = mergedAudioUrl;
         audioLoaded = true;
+        updateWaitingMessage();
         setTitle(name);
     } else {
         audio.src = URL.createObjectURL(files[0]);
         audioLoaded = true;
+        updateWaitingMessage();
     }
     // if (openaiKey && anthropicKey) {
     //     let runSTT = true;
@@ -862,3 +865,38 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         }
     }
 });
+
+// ── 안내 문구(대기 화면) 동적 업데이트 ──
+function updateWaitingMessage() {
+    // 이미 자막이 생성되어 화면에 뿌려진 상태라면 작동하지 않음
+    if (subtitles.length > 0) return;
+
+    const waitingKr = document.querySelector('.subtitle-area .subtitle-kr');
+    const waitingEn = document.querySelector('.subtitle-area .subtitle-en');
+    const waitingLine = document.querySelector('.subtitle-area .subtitle-line');
+
+    // 만약 요소를 못 찾으면 (이미 다른 자막으로 덮어씌워졌으면) 패스
+    if (!waitingKr || !waitingEn || !waitingLine) return;
+
+    if (audioLoaded && openaiKey && anthropicKey) {
+        // 🌟 모든 준비가 끝났을 때!
+        waitingKr.textContent = "타디스 번역 회로 연결 완료! \n좌측의 [GENERATE] 폴더를 누르세요.";
+        waitingEn.textContent = "Translation circuits connected! Press [GENERATE] on the left.";
+        waitingLine.style.opacity = '0.5';
+    } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
+        // 오디오만 있고 키가 없을 때
+        waitingKr.textContent = "오디오 스캔 완료. \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
+        waitingEn.textContent = "Audio scanned. Please enter API keys.";
+        waitingLine.style.opacity = '0.5';
+    } else if (!audioLoaded && (openaiKey && anthropicKey)) {
+        // 키만 있고 오디오가 없을 때
+        waitingKr.textContent = "API 키 입력 확인. \n좌측의 [AUDIO] 폴더를 눌러 오디오를 넣으세요.";
+        waitingEn.textContent = "Keys verified. Please insert audio.";
+        waitingLine.style.opacity = '0.5';
+    } else {
+        // 둘 다 없을 때 (초기 상태)
+        waitingKr.textContent = "자막 물질화 대기 중...";
+        waitingEn.textContent = "Waiting for subtitle materialization...";
+        waitingLine.style.opacity = '0.5';
+    }
+}
