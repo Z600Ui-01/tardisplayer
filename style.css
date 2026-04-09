@@ -13,8 +13,8 @@
 * { margin: 0; padding: 0; box-sizing: border-box; letter-spacing: -0.1px;}
 
 .outer {
-  /* background: var(--blue); */
-  background: var(--scherzo);
+  background: var(--blue);
+  /* background: var(--scherzo); */
   width: 100vw;
   height: 100vh;
   display: flex;
