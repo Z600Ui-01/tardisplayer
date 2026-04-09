@@ -689,6 +689,16 @@ document.querySelectorAll('.setting-option').forEach(opt => {
                 el.style.display = (mode === 'kr') ? 'none' : 'block';
             });
         }
+
+        // 스포일러 모드 토글
+        if (group === 'spoiler') {
+            const area = document.querySelector('.subtitle-area');
+            if (opt.dataset.value === 'on') {
+                area.classList.add('spoiler-on');
+            } else {
+                area.classList.remove('spoiler-on');
+            }
+        }
     });
 });
 
@@ -785,32 +795,55 @@ function renderSubtitles(subs) {
 
 // ── 타임싱크 ──
 let lastActiveIndex = -1;
+let lastRevealedIndex = -1; // 💡 스포일러가 해제된 최신 위치를 기억할 변수 추가!
 
 function syncSubtitles() {
     if (!subtitles.length) return;
     const t = audio.currentTime;
     let activeIndex = -1;
+    let revealedIndex = -1;
 
+    // 1. 현재 타이밍 계산
     for (let i = 0; i < subtitles.length; i++) {
+        // 현재 시간(t)이 자막 시작 시간보다 뒤에 있다면 일단 '밝혀진(revealed)' 상태로 갱신
+        if (t >= subtitles[i].start) {
+            revealedIndex = i;
+        }
+        // 정확히 말하고 있는 시간대라면 '활성화(active)' 상태로 지정
         if (t >= subtitles[i].start && t < subtitles[i].end) {
             activeIndex = i;
-            break;
         }
     }
 
-    if (activeIndex === lastActiveIndex) return;
-    lastActiveIndex = activeIndex;
-
     const area = document.querySelector('.subtitle-area');
-    area.querySelectorAll('.subtitle-line').forEach(el => el.classList.remove('active'));
 
-    if (activeIndex >= 0) {
-        const activeLine = area.querySelector(`.subtitle-line[data-index="${activeIndex}"]`);
-        activeLine.classList.add('active');
-        const areaRect = area.getBoundingClientRect();
-        const lineRect = activeLine.getBoundingClientRect();
-        const offset = lineRect.top - areaRect.top + area.scrollTop - (area.clientHeight / 2) + (activeLine.clientHeight / 2);
-        area.scrollTo({ top: offset, behavior: 'smooth' });
+    // 2. 스포일러(밝혀짐) 상태 업데이트 (바뀌었을 때만 실행해서 성능 최적화)
+    if (revealedIndex !== lastRevealedIndex) {
+        lastRevealedIndex = revealedIndex;
+        area.querySelectorAll('.subtitle-line').forEach((el, idx) => {
+            if (idx <= revealedIndex) {
+                el.classList.add('revealed'); // 지나온 대사들은 revealed 클래스 추가
+            } else {
+                el.classList.remove('revealed');
+            }
+        });
+    }
+
+    // 3. 현재 재생 중인 대사 하이라이트 및 스크롤 (기존 로직과 동일)
+    if (activeIndex !== lastActiveIndex) {
+        lastActiveIndex = activeIndex;
+        area.querySelectorAll('.subtitle-line').forEach(el => el.classList.remove('active'));
+
+        if (activeIndex >= 0) {
+            const activeLine = area.querySelector(`.subtitle-line[data-index="${activeIndex}"]`);
+            if (activeLine) {
+                activeLine.classList.add('active');
+                const areaRect = area.getBoundingClientRect();
+                const lineRect = activeLine.getBoundingClientRect();
+                const offset = lineRect.top - areaRect.top + area.scrollTop - (area.clientHeight / 2) + (activeLine.clientHeight / 2);
+                area.scrollTo({ top: offset, behavior: 'smooth' });
+            }
+        }
     }
 }
 

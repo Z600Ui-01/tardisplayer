@@ -8,11 +8,13 @@
   --border: #C8C2B6;
   --font-en: 'MODERIZ', 'Pretendard', sans-serif;
   --font-kr: 'Pretendard', sans-serif;
+  --scherzo: #FCFCFC;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; letter-spacing: -0.1px;}
 
 .outer {
-  background: var(--blue);
+  /* background: var(--blue); */
+  background: var(--scherzo);
   width: 100vw;
   height: 100vh;
   display: flex;
@@ -422,4 +424,20 @@
   width: 18px;
   height: 18px;
   border-radius: 3px;
+}
+
+/* ── 스포일러 방지 모드 ── */
+/* spoiler-on 상태일 때: 일단 '모든' 자막을 흐리게 가려버림 */
+.subtitle-area.spoiler-on .subtitle-line {
+  opacity: 0.15;
+  filter: blur(5px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* 하지만 이미 지나갔거나 지금 재생 중인(.revealed) 자막은 선명하게 보여줌! */
+.subtitle-area.spoiler-on .subtitle-line.revealed {
+  opacity: 1;
+  filter: none;
+  pointer-events: auto;
 }
