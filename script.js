@@ -42,20 +42,41 @@ const audioIcon = document.getElementById('audioIcon');
 const captureIcon = document.getElementById('captureIcon');
 
 // ── 프롬프트 ──
-const whisperPrompt = 'Romana, Zagreus, Charley, Rassilon, K9, K-9';
-const claudeSystemPrompt = `너는 닥터후 오디오 드라마 자막 번역기야. 영어를 한국어로 번역해.
-- 캐릭터의 성격과 관계에 맞는 자연스러운 구어체 한국어
-- 주인공으로 나오는 닥터와 컴패니언의 성격을 반영한 번역
-- 닥터는 컴패니언에게 반말 사용, 그 외의 관계에서는 상황에 적절하게
-- 컴패니언은 특수한 상황이 아니면 닥터에게 존댓말을 사용
-- 감정이 실린 대사는 직역보다 감정 전달 우선
-- 조연끼리의 위계와 관계도 고려해서 반말과 존댓말을 적절하게 사용
-- 빌런 캐릭터는 빌런에게 어울리는 말투를 사용
-- 영국식 유머와 말장난은 한국어에서도 재치있게 살릴 것
-- 고유명사(타디스, 소닉 드라이버, 달렉, 마스터 등)는 그대로 유지
-- 한 번호에 여러 화자의 대사가 있으면 / 로 구분해서 번역
-- 입력된 번호 하나당 번역 결과도 정확히 하나. 여러 번호를 합치거나 하나를 쪼개지 말 것
-- 번호|번역 형식 외의 텍스트 출력 금지`;
+// 항상 쓰이는 핵심 고유명사 (고정)
+const coreVocab = `TARDIS, Time Lord, Gallifrey, Sonic Screwdriver, Jelly Baby, Dalek, Davros, Cyberman, Sontaran, Zygon, The Master, Rassilon,`;
+// 에피소드마다 바꿔주는 전용 고유명사 (인물 이름, 행성 이름 등)
+const episodeVocab = '';
+// 컴패니언 이름
+const campanionVocab = 'Sarah, Leela, Romana, K-9, K9, Adric, brigadier, Lethbridge-Stewart,';
+
+const whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
+
+// const claudeSystemPrompt = `너는 닥터후 오디오 드라마 자막 번역기야. 영어를 한국어로 번역해.
+// - 캐릭터의 성격과 관계에 맞는 자연스러운 구어체 한국어
+// - 주인공으로 나오는 닥터와 컴패니언의 성격을 반영한 번역
+// - 닥터는 컴패니언에게 반말 사용, 그 외의 관계에서는 상황에 적절하게
+// - 컴패니언은 특수한 상황이 아니면 닥터에게 존댓말을 사용
+// - 감정이 실린 대사는 직역보다 감정 전달 우선
+// - 조연끼리의 위계와 관계도 고려해서 반말과 존댓말을 적절하게 사용
+// - 빌런 캐릭터는 빌런에게 어울리는 말투를 사용
+// - 영국식 유머와 말장난은 한국어에서도 재치있게 살릴 것
+// - 고유명사(타디스, 소닉 드라이버, 달렉, 마스터 등)는 그대로 유지
+// - 한 번호에 여러 화자의 대사가 있으면 / 로 구분해서 번역
+// - 입력된 번호 하나당 번역 결과도 정확히 하나. 여러 번호를 합치거나 하나를 쪼개지 말 것
+// - 번호|번역 형식 외의 텍스트 출력 금지`;
+const claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
+Follow these rules strictly:
+- Tone & Relationship: Use natural, conversational Korean reflecting the characters' personalities.
+- The Doctor -> Companion: Use informal language (반말/Banmal). For others, adjust appropriately by context.
+- Companion -> The Doctor: Use polite/formal language (존댓말/Jondaetmal) unless in highly specific or emotional situations.
+- Supporting Characters: Apply Banmal or Jondaetmal correctly based on their hierarchy and relationships.
+- Villains: Use an appropriately sinister or arrogant tone fitting for villains.
+- Emotion & Nuance: Prioritize emotional delivery and context over literal, word-for-word translation.
+- British Humor: Adapt British humor, idioms, and puns wittily into natural Korean.
+- Proper Nouns: Maintain terms like 타디스(TARDIS), 소닉 스크류드라이버(Sonic Screwdriver), 달렉(Dalek), 마스터(Master), 젤리베이비(Jelly Baby).
+- Multiple Speakers: If multiple speakers share a single subtitle number, separate their lines using a slash (/).
+- STRICT FORMATTING: Maintain a strict 1:1 mapping between input and output numbers. NEVER merge or split numbers.
+- OUTPUT FORMAT: You must ONLY output in the "Number|Translated Text" format. No intro, no outro, no extra text.`;
 
 // ── Whisper STT ──
 async function transcribeTrack(file, offsetSec) {
@@ -190,8 +211,17 @@ async function translateSubtitles(subs) {
                     },
                     body: JSON.stringify({
                         model: 'claude-sonnet-4-20250514',
+                        //model: 'claude-3-5-haiku-latest', 
                         max_tokens: 4096,
-                        system: claudeSystemPrompt,
+                        
+                        // 프롬프트 캐싱 적용 (배열 형태로 변경 후 cache_control 추가)
+                        system: [
+                            {
+                                type: "text",
+                                text: claudeSystemPrompt,
+                                cache_control: { type: "ephemeral" }
+                            }
+                        ],
                         messages: [{ role: 'user', content: userMsg }]
                     })
                 });
@@ -215,7 +245,6 @@ async function translateSubtitles(subs) {
                     }
                 });
 
-                // 개수 불일치 = 밀림 가능성
                 if (parsed.length !== expectedCount && attempts < 3) {
                     console.warn('개수 불일치:', parsed.length + '/' + expectedCount, '재시도');
                     batch.forEach((_, j) => { delete subs[i + j].kr; });
@@ -257,8 +286,17 @@ async function translateSubtitles(subs) {
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
+                    // model: 'claude-3-5-haiku-latest',
                     max_tokens: 4096,
-                    system: claudeSystemPrompt,
+                    
+                    // 캐싱 적용
+                    system: [
+                        {
+                            type: "text",
+                            text: claudeSystemPrompt,
+                            cache_control: { type: "ephemeral" }
+                        }
+                    ],
                     messages: [{
                         role: 'user',
                         content: '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n\n' + numberedLines
@@ -278,6 +316,123 @@ async function translateSubtitles(subs) {
 
     return subs;
 }
+// async function translateSubtitles(subs) {
+//     const batchSize = 25;
+//     for (let i = 0; i < subs.length; i += batchSize) {
+//         const batch = subs.slice(i, i + batchSize);
+//         const numberedLines = batch.map((s, j) => (i + j + 1) + '|' + s.text).join('\n---\n');
+//         const expectedCount = batch.length;
+
+//         setTitle('번역 중 ' + (i + 1) + '-' + Math.min(i + batchSize, subs.length) + '/' + subs.length + '...');
+
+//         let attempts = 0;
+//         let success = false;
+
+//         while (attempts < 3 && !success) {
+//             attempts++;
+//             try {
+//                 const userMsg = attempts === 1
+//                     ? '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n총 ' + expectedCount + '개 번호를 빠짐없이 출력할 것.\n\n' + numberedLines
+//                     : '다음 자막을 한국어로 번역해.\n\n⚠️ 중요: 이전 시도에서 번호가 밀리는 오류가 발생함.\n- 입력 번호와 출력 번호가 반드시 1:1 대응해야 함\n- 예시: 입력이 5|Hello 이면 출력도 반드시 5|안녕\n- 두 줄을 합쳐서 번역하지 말 것\n- 총 ' + expectedCount + '개 전부 출력할 것\n- 번호|번역 형식으로만 응답\n\n' + numberedLines;
+
+//                 const res = await fetch('https://api.anthropic.com/v1/messages', {
+//                     method: 'POST',
+//                     headers: {
+//                         'Content-Type': 'application/json',
+//                         'x-api-key': anthropicKey,
+//                         'anthropic-version': '2023-06-01',
+//                         'anthropic-dangerous-direct-browser-access': 'true'
+//                     },
+//                     body: JSON.stringify({
+//                         model: 'claude-sonnet-4-20250514',
+//                         max_tokens: 4096,
+//                         system: claudeSystemPrompt,
+//                         messages: [{ role: 'user', content: userMsg }]
+//                     })
+//                 });
+
+//                 const data = await res.json();
+//                 const text = data.content[0].text;
+//                 const parsed = [];
+//                 text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
+//                     const match = line.match(/^(\d+)\|(.+)/);
+//                     if (match) {
+//                         const idx = parseInt(match[1]) - 1;
+//                         if (idx >= 0 && idx < subs.length) {
+//                             const translated = match[2].trim();
+//                             if (translated.length > subs[idx].text.length * 3) {
+//                                 console.warn('합쳐진 번역 의심:', idx + 1, translated);
+//                             } else {
+//                                 subs[idx].kr = translated;
+//                                 parsed.push(idx);
+//                             }
+//                         }
+//                     }
+//                 });
+
+//                 // 개수 불일치 = 밀림 가능성
+//                 if (parsed.length !== expectedCount && attempts < 3) {
+//                     console.warn('개수 불일치:', parsed.length + '/' + expectedCount, '재시도');
+//                     batch.forEach((_, j) => { delete subs[i + j].kr; });
+//                     continue;
+//                 }
+
+//                 const batchIndices = batch.map((_, j) => i + j);
+//                 const missing = batchIndices.filter(idx => !parsed.includes(idx));
+
+//                 if (missing.length === 0) {
+//                     success = true;
+//                 } else if (attempts < 3) {
+//                     console.warn('배치 재시도 (누락 ' + missing.length + '개), 시도 ' + (attempts + 1));
+//                     batch.forEach((_, j) => { delete subs[i + j].kr; });
+//                     continue;
+//                 } else {
+//                     success = true;
+//                 }
+//             } catch (err) {
+//                 console.error('번역 배치 실패:', i, err);
+//                 if (attempts >= 3) success = true;
+//             }
+//         }
+//     }
+
+//     // 최종 누락분 재시도
+//     const missed = subs.filter(s => !s.kr);
+//     if (missed.length > 0 && missed.length < 20) {
+//         const numberedLines = missed.map(s => (subs.indexOf(s) + 1) + '|' + s.text).join('\n---\n');
+//         setTitle('최종 누락분 ' + missed.length + '개 재번역...');
+//         try {
+//             const res = await fetch('https://api.anthropic.com/v1/messages', {
+//                 method: 'POST',
+//                 headers: {
+//                     'Content-Type': 'application/json',
+//                     'x-api-key': anthropicKey,
+//                     'anthropic-version': '2023-06-01',
+//                     'anthropic-dangerous-direct-browser-access': 'true'
+//                 },
+//                 body: JSON.stringify({
+//                     model: 'claude-sonnet-4-20250514',
+//                     max_tokens: 4096,
+//                     system: claudeSystemPrompt,
+//                     messages: [{
+//                         role: 'user',
+//                         content: '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n\n' + numberedLines
+//                     }]
+//                 })
+//             });
+//             const data = await res.json();
+//             data.content[0].text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
+//                 const match = line.match(/^(\d+)\|(.+)/);
+//                 if (match) {
+//                     const idx = parseInt(match[1]) - 1;
+//                     if (idx >= 0 && idx < subs.length) subs[idx].kr = match[2].trim();
+//                 }
+//             });
+//         } catch (err) { }
+//     }
+
+//     return subs;
+// }
 
 let openaiKey = '';
 let anthropicKey = '';
