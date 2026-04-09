@@ -849,6 +849,16 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
     // 3. 실행 승인 시 본격적인 STT + 번역 시작
     if (runSTT) {
         document.getElementById('generateIcon').style.background = 'var(--blue)'; // 버튼에 파란색 불 켜기
+
+        // 화면을 다시 "물질화 대기 중" 상태로 변경 
+        const area = document.querySelector('.subtitle-area');
+        area.style.justifyContent = 'center';
+        area.innerHTML = `
+            <div class="subtitle-line active" style="text-align: center; opacity: 0.7; background: var(--light-blue);">
+              <div class="subtitle-kr">자막 물질화 대기 중...<br>타임 볼텍스를 통과하며 번역 중입니다. <br>잠시만 기다려주세요.</div>
+              <div class="subtitle-en">Waiting for subtitle materialization...<br>Translation in progress. Please wait.</div>
+            </div>
+        `;
         
         try {
             const subs = await transcribeAll(tracks);
@@ -883,24 +893,24 @@ function updateWaitingMessage() {
 
     if (audioLoaded && openaiKey && anthropicKey) {
         // 🌟 모든 준비가 끝났을 때!
-        waitingKr.textContent = "타디스 번역 회로 연결 완료! \n좌측의 [GENERATE] 폴더를 누르세요.";
-        waitingEn.textContent = "Translation circuits connected! Press [GENERATE] on the left.";
+        waitingKr.textContent = "타디스 번역 회로 연결 완료! \n[GENERATE]를 눌러 자막을 생성하거나 \n[SRT] 자막을 로드하세요.";
+        waitingEn.textContent = "Translation circuits connected! \nPress [GENERATE] or load an [SRT] file.";
         waitingLine.style.opacity = '0.5';
     } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
         // 오디오만 있고 키가 없을 때
-        waitingKr.textContent = "오디오 스캔 완료. \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
+        waitingKr.textContent = "오디오 스캔 완료. [SRT] 자막을 넣거나, \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
         // TODO: 키 입력 문구 변경 필요! api키가 필수가 아님!!
-        waitingEn.textContent = "Audio scanned. Please enter API keys.";
+        waitingEn.textContent = "Audio scanned. Load [SRT] subtitles, or enter API keys [🔑] to generate.";
         waitingLine.style.opacity = '0.5';
     } else if (!audioLoaded && (openaiKey && anthropicKey)) {
         // 키만 있고 오디오가 없을 때
-        waitingKr.textContent = "API 키 입력 확인. \n좌측의 [AUDIO] 폴더를 눌러 오디오를 넣으세요.";
-        waitingEn.textContent = "Keys verified. Please insert audio.";
+        waitingKr.textContent = "API 키 입력 확인. \n[AUDIO] 폴더를 눌러 오디오를 넣으세요.";
+        waitingEn.textContent = "Keys verified. Press [AUDIO] to inject audio data.";
         waitingLine.style.opacity = '0.5';
     } else {
         // 둘 다 없을 때 (초기 상태)
-        waitingKr.textContent = "자막 물질화 대기 중...";
-        waitingEn.textContent = "Waiting for subtitle materialization...";
+        waitingKr.textContent = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, [🔑]로 번역 회로를 연결하세요.";
+        waitingEn.textContent = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
         waitingLine.style.opacity = '0.5';
     }
 }
