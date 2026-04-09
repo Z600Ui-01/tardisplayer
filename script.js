@@ -530,18 +530,18 @@ audioInput.addEventListener('change', async e => {
         audio.src = URL.createObjectURL(files[0]);
         audioLoaded = true;
     }
-    if (openaiKey && anthropicKey) {
-        let runSTT = true;
-        if (subtitles.length) {
-            runSTT = confirm('이미 자막이 있습니다. 새로 생성할까요?');
-        }
-        if (runSTT) {
-            const subs = await transcribeAll(files);
-            const translated = await translateSubtitles(subs);
-            renderSubtitles(translated);
-            setTitle(name);
-        }
-    }
+    // if (openaiKey && anthropicKey) {
+    //     let runSTT = true;
+    //     if (subtitles.length) {
+    //         runSTT = confirm('이미 자막이 있습니다. 새로 생성할까요?');
+    //     }
+    //     if (runSTT) {
+    //         const subs = await transcribeAll(files);
+    //         const translated = await translateSubtitles(subs);
+    //         renderSubtitles(translated);
+    //         setTitle(name);
+    //     }
+    // }
 });
 
 audio.addEventListener('loadedmetadata', () => {
@@ -820,4 +820,45 @@ document.getElementById('srtInput').addEventListener('change', e => {
         renderSubtitles(subs);
     };
     reader.readAsText(file);
+});
+
+// ── 수동 자막 생성 로직 ──
+document.getElementById('generateBtn').addEventListener('click', async () => {
+    // 1. 방어 로직: 오디오 파일이 없거나 키가 없으면 튕겨냄
+    if (!audioLoaded || !tracks.length) {
+        alert('먼저 오디오 파일(AUDIO)을 업로드해주세요!');
+        return;
+    }
+    if (!openaiKey || !anthropicKey) {
+        alert('우측 상단의 열쇠 버튼을 눌러 API 키를 먼저 입력해주세요!');
+        return;
+    }
+
+    // 2. 이미 자막이 있을 경우 경고
+    let runSTT = true;
+    if (subtitles.length) {
+        runSTT = confirm('이미 자막이 있습니다. 새로 번역을 돌릴까요?\n(진행 시 기존 자막은 삭제되고 토큰이 소모됩니다.)');
+    }
+
+    // 3. 실행 승인 시 본격적인 STT + 번역 시작
+    if (runSTT) {
+        document.getElementById('generateIcon').style.background = 'var(--blue)'; // 버튼에 파란색 불 켜기
+        
+        try {
+            const subs = await transcribeAll(tracks);
+            const translated = await translateSubtitles(subs);
+            renderSubtitles(translated);
+            
+            // 번역이 끝나면 타이틀바 원래 이름으로 복구
+            const name = tracks.length > 1
+                ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (tracks.length - 1) + '트랙'
+                : tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase();
+            setTitle(name);
+        } catch (error) {
+            console.error('번역 중 에러 발생:', error);
+            alert('자막 생성에 실패했습니다.\n\n[가능성 높은 원인]\n1. API 키를 잘못 입력했거나 만료됨\n2. 오디오 파일에 음성이 없음\n\n우측 상단의 열쇠(🔑) 버튼을 눌러 API 키가 정확한지 다시 확인해 보세요!');
+        } finally {
+            document.getElementById('generateIcon').style.background = 'transparent'; // 끝난 후 불 끄기
+        }
+    }
 });
