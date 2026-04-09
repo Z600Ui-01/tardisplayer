@@ -460,3 +460,105 @@
   filter: none;
   pointer-events: auto;
 }
+
+/* ── API 키 모달 ── */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(10, 10, 9, 0.4);
+  backdrop-filter: blur(3px);
+  display: none; /* 평소에는 숨김 */
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal-overlay.active {
+  display: flex;
+}
+.modal-box {
+  background: var(--cream);
+  border: 1px solid var(--charcoal);
+  border-radius: 12px;
+  padding: 32px;
+  width: 440px;
+  max-width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 4px 4px 0px rgba(49, 50, 44, 0.2);
+}
+.modal-title {
+  font-family: var(--font-en);
+  font-size: 20px;
+  color: var(--charcoal);
+  text-align: center;
+  margin-bottom: 4px;
+}
+.modal-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.modal-group label {
+  font-family: var(--font-kr);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--charcoal);
+}
+.modal-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--charcoal);
+  border-radius: 6px;
+  background: #fff;
+  font-family: var(--font-en), monospace;
+  font-size: 14px;
+  color: var(--charcoal);
+  outline: none;
+}
+.modal-group input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--light-blue);
+}
+.modal-desc {
+  font-family: var(--font-kr);
+  font-size: 12px;
+  color: var(--warm-gray);
+}
+.modal-desc a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+.modal-desc a:hover {
+  text-decoration: underline;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.modal-btn {
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-family: var(--font-kr);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--charcoal);
+  transition: background 0.15s;
+}
+.modal-btn.cancel {
+  background: transparent;
+  color: var(--charcoal);
+}
+.modal-btn.cancel:hover {
+  background: #E8E2D6;
+}
+.modal-btn.confirm {
+  background: var(--charcoal);
+  color: var(--cream);
+}
+.modal-btn.confirm:hover {
+  background: var(--black);
+}

@@ -321,22 +321,66 @@ let openaiKey = '';
 let anthropicKey = '';
 
 // ── API 키 입력 ──
-function askApiKeys() {
-    const oKey = prompt('OpenAI API 키를 입력하세요 (Whisper STT용)\n없으면 빈칸으로 넘기세요\n\n키 발급: platform.openai.com/api-keys', openaiKey || '');
-    if (oKey !== null) openaiKey = oKey.trim();
-    const aKey = prompt('Anthropic API 키를 입력하세요 (Claude 번역용)\n없으면 빈칸으로 넘기세요\n\n키 발급: console.anthropic.com/settings/keys', anthropicKey || '');
-    if (aKey !== null) anthropicKey = aKey.trim();
-    const keyIcon = document.querySelector('.key-icon');
+// function askApiKeys() {
+//     const oKey = prompt('OpenAI API 키를 입력하세요 (Whisper STT용)\n없으면 빈칸으로 넘기세요\n\n키 발급: platform.openai.com/api-keys', openaiKey || '');
+//     if (oKey !== null) openaiKey = oKey.trim();
+//     const aKey = prompt('Anthropic API 키를 입력하세요 (Claude 번역용)\n없으면 빈칸으로 넘기세요\n\n키 발급: console.anthropic.com/settings/keys', anthropicKey || '');
+//     if (aKey !== null) anthropicKey = aKey.trim();
+//     const keyIcon = document.querySelector('.key-icon');
+//     if (openaiKey || anthropicKey) {
+//         keyIcon.style.background = 'var(--light-blue)';
+//     } else {
+//         keyIcon.style.background = 'transparent';
+//     }
+// }
+
+// askApiKeys();
+
+// document.getElementById('keyBtn').addEventListener('click', askApiKeys);
+// ── 커스텀 API 키 모달 로직 ──
+const apiModal = document.getElementById('apiModal');
+const openaiInput = document.getElementById('openaiInput');
+const anthropicInput = document.getElementById('anthropicInput');
+const btnCancelApi = document.getElementById('btnCancelApi');
+const btnConfirmApi = document.getElementById('btnConfirmApi');
+const keyIcon = document.querySelector('.key-icon');
+
+// 모달 열기 (기존 키가 있으면 인풋창에 채워줌)
+function openApiModal() {
+    openaiInput.value = openaiKey;
+    anthropicInput.value = anthropicKey;
+    apiModal.classList.add('active');
+}
+
+// 모달 닫기
+function closeApiModal() {
+    apiModal.classList.remove('active');
+}
+
+// 열쇠 버튼 누르면 모달 열림
+document.getElementById('keyBtn').addEventListener('click', openApiModal);
+
+// 취소 버튼 누르면 닫힘
+btnCancelApi.addEventListener('click', closeApiModal);
+
+// 모달 바깥쪽(어두운 배경) 클릭해도 닫히게 설정
+apiModal.addEventListener('click', (e) => {
+    if (e.target === apiModal) closeApiModal();
+});
+
+// 확인 버튼 누르면 변수에 키 저장 & 열쇠 아이콘 파란색 점등
+btnConfirmApi.addEventListener('click', () => {
+    openaiKey = openaiInput.value.trim();
+    anthropicKey = anthropicInput.value.trim();
+    
     if (openaiKey || anthropicKey) {
         keyIcon.style.background = 'var(--light-blue)';
     } else {
         keyIcon.style.background = 'transparent';
     }
-}
-
-askApiKeys();
-
-document.getElementById('keyBtn').addEventListener('click', askApiKeys);
+    
+    closeApiModal();
+});
 
 const titleSpan = document.getElementById('titleSpan');
 
