@@ -935,7 +935,7 @@ function updateWaitingMessage() {
 
     // HTML 화면에 쏴주기
     area.innerHTML = `
-        <div class="subtitle-line active" style="text-align: center; background: transparent; padding: 0;">
+        <div class="subtitle-line active" style="text-align: center; background: transparent;">
           <div style="opacity: 0.5;">
             <div class="subtitle-kr">${krText}</div>
             <div class="subtitle-en">${enText}</div>
