@@ -935,13 +935,11 @@ function updateWaitingMessage() {
 
     // HTML 화면에 쏴주기
     area.innerHTML = `
-        <div class="subtitle-line active" style="text-align: center; background: transparent;">
-          <div style="opacity: 0.5;">
-            <div class="subtitle-kr">${krText}</div>
-            <div class="subtitle-en">${enText}</div>
-          </div>
-          <div style="margin-top: 10px;">${btnHtml}</div>
-        </div>
+    <div class="subtitle-line active" style="text-align: center;">
+        <div class="subtitle-kr" style="color: var(--warm-gray);">${krText}</div>
+        <div class="subtitle-en" style="color: var(--border);">${enText}</div>
+        ${btnHtml ? `<div style="margin-top: 10px;">${btnHtml}</div>` : ''}
+    </div>
     `;
 
     // 🌟 렌더링 된 버튼에 클릭 이벤트 달아주기
