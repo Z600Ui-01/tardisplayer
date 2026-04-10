@@ -573,8 +573,8 @@
   background: var(--charcoal);
   color: var(--cream);
   border: none;
-  padding: 14px 32px;
-  border-radius: 40px;
+  padding: 10px 24px;
+  border-radius: 0px;
   font-family: var(--font-kr);
   font-size: 18px;
   font-weight: 700;
