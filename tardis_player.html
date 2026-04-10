@@ -192,16 +192,20 @@
 
       <div class="modal-group">
         <label>OpenAI API Key (Whisper STT용)</label>
-        <input type="password" id="openaiInput" placeholder="sk-...">
-        <p class="modal-desc">키 발급: <a href="https://platform.openai.com/api-keys"
-            target="_blank">platform.openai.com/api-keys</a></p>
+        <div class="input-container">
+          <input type="password" id="openaiInput" placeholder="sk-...">
+          <button type="button" class="eye-btn" tabindex="-1"></button>
+        </div>
+        <p class="modal-desc">키 발급: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></p>
       </div>
 
       <div class="modal-group">
         <label>Anthropic API Key (Claude 번역용)</label>
-        <input type="password" id="anthropicInput" placeholder="sk-ant-...">
-        <p class="modal-desc">키 발급: <a href="https://console.anthropic.com/settings/keys"
-            target="_blank">console.anthropic.com/settings/keys</a></p>
+        <div class="input-container">
+          <input type="password" id="anthropicInput" placeholder="sk-ant-...">
+          <button type="button" class="eye-btn" tabindex="-1"></button>
+        </div>
+        <p class="modal-desc">키 발급: <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a></p>
       </div>
 
       <div class="modal-actions">

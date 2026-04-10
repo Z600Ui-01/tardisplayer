@@ -597,3 +597,31 @@
   width: 20px;
   height: 20px;
 }
+
+/* ── API 입력창 눈동자 아이콘 ── */
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-container input {
+  width: 100%;
+  padding-right: 40px; /* 눈동자 버튼이 들어갈 공간 확보 */
+}
+.eye-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--charcoal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.eye-btn:hover {
+  opacity: 1;
+}
