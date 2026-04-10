@@ -572,7 +572,7 @@
   gap: 6px;
   background: var(--charcoal);
   color: var(--cream);
-  border: none;
+  border: 1px solid var(--charcoal);
   padding: 10px 20px;
   border-radius: 0px;
   font-family: var(--font-kr);
