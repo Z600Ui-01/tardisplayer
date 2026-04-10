@@ -580,11 +580,10 @@
   font-weight: 600;
   cursor: pointer;
   margin-top: 20px;
-  transition: background 0.15s, transform 0.1s;
-  /* box-shadow: 0 4px 12px rgba(0,0,0,0.15); */
+  transition: box-shadow 0.15s;
 }
 .inline-generate-btn:hover {
-  box-shadow: inset 0 0 0 1px var(--charcoal), inset 0 0 0 2px var(--cream);
+  box-shadow: inset 0 0 0 2px var(--charcoal), inset 0 0 0 4px var(--cream);
 }
 .inline-generate-btn:active {
   transform: translateY(0px);
