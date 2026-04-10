@@ -560,18 +560,6 @@ audioInput.addEventListener('change', async e => {
         audioLoaded = true;
         updateWaitingMessage();
     }
-    // if (openaiKey && anthropicKey) {
-    //     let runSTT = true;
-    //     if (subtitles.length) {
-    //         runSTT = confirm('이미 자막이 있습니다. 새로 생성할까요?');
-    //     }
-    //     if (runSTT) {
-    //         const subs = await transcribeAll(files);
-    //         const translated = await translateSubtitles(subs);
-    //         renderSubtitles(translated);
-    //         setTitle(name);
-    //     }
-    // }
 });
 
 audio.addEventListener('loadedmetadata', () => {
@@ -852,9 +840,9 @@ document.getElementById('srtInput').addEventListener('change', e => {
     reader.readAsText(file);
 });
 
-// ── 수동 자막 생성 로직 ──
-document.getElementById('generateBtn').addEventListener('click', async () => {
-    // 1. 방어 로직: 오디오 파일이 없거나 키가 없으면 튕겨냄
+// ── 수동 자막 생성 로직  ──
+async function runSubtitleGeneration() {
+    // 1. 방어 로직 : 오디오 파일이 없거나 키가 없으면 튕겨냄
     if (!audioLoaded || !tracks.length) {
         alert('먼저 오디오 파일(AUDIO)을 업로드해주세요!');
         return;
@@ -864,6 +852,7 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
         return;
     }
 
+
     // 2. 이미 자막이 있을 경우 경고
     let runSTT = true;
     if (subtitles.length) {
@@ -872,15 +861,13 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
 
     // 3. 실행 승인 시 본격적인 STT + 번역 시작
     if (runSTT) {
-        document.getElementById('generateIcon').style.background = 'var(--blue)'; // 버튼에 파란색 불 켜기
-
-        // 화면을 다시 "물질화 대기 중" 상태로 변경 
+        // 대기 화면 UI 변경
         const area = document.querySelector('.subtitle-area');
         area.style.justifyContent = 'center';
         area.innerHTML = `
             <div class="subtitle-line active" style="text-align: center; opacity: 0.7; background: var(--light-blue);">
-              <div class="subtitle-kr">자막 물질화 대기 중...<br>타임 볼텍스를 통과하며 번역 중입니다. <br>잠시만 기다려주세요.</div>
-              <div class="subtitle-en">Waiting for subtitle materialization...<br>Translation in progress. Please wait.</div>
+                <div class="subtitle-kr">자막 물질화 대기 중...<br>타임 볼텍스를 통과하며 번역 중입니다.</div>
+                <div class="subtitle-en">Waiting for subtitle materialization...<br>Translation in progress.</div>
             </div>
         `;
         
@@ -911,45 +898,58 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
                 ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (tracks.length - 1) + '트랙'
                 : tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase();
             setTitle(name);
-
-        } finally {
-            document.getElementById('generateIcon').style.background = 'transparent'; // 끝난 후 불 끄기
         }
     }
-});
+}
 
 // ── 안내 문구(대기 화면) 동적 업데이트 ──
 function updateWaitingMessage() {
     // 이미 자막이 생성되어 화면에 뿌려진 상태라면 작동하지 않음
     if (subtitles.length > 0) return;
 
-    const waitingKr = document.querySelector('.subtitle-area .subtitle-kr');
-    const waitingEn = document.querySelector('.subtitle-area .subtitle-en');
-    const waitingLine = document.querySelector('.subtitle-area .subtitle-line');
+    const area = document.querySelector('.subtitle-area');
+    area.style.justifyContent = 'center';
 
-    // 만약 요소를 못 찾으면 (이미 다른 자막으로 덮어씌워졌으면) 패스
-    if (!waitingKr || !waitingEn || !waitingLine) return;
+    let krText = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, [🔑]로 번역 회로를 연결하세요.";
+    let enText = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
+    let btnHtml = "";
 
+    // 조건에 따라 텍스트와 버튼 렌더링 변경
     if (audioLoaded && openaiKey && anthropicKey) {
-        // 🌟 모든 준비가 끝났을 때!
-        waitingKr.textContent = "타디스 번역 회로 연결 완료! \n[GENERATE]를 눌러 자막을 생성하거나 \n[SRT] 자막을 로드하세요.";
-        waitingEn.textContent = "Translation circuits connected! \nPress [GENERATE] or load an [SRT] file.";
-        waitingLine.style.opacity = '0.5';
+        krText = "자막 물질화 준비 완료! \n자막을 생성하거나 \n[SRT] 자막을 로드하세요.";
+        enText = "Translation circuits connected and ready. \nPress [GENERATE] or load an [SRT] file.";
+        // 🌟 오디오와 키가 모두 세팅되었을 때만 예쁜 생성 버튼 등장!
+        btnHtml = `<button id="inlineGenerateBtn" class="inline-generate-btn">
+             <img src="icons/generate.svg" class="btn-svg-icon" alt=""> 자막 생성 시작하기
+           </button>`;
     } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
-        // 오디오만 있고 키가 없을 때
-        waitingKr.textContent = "오디오 스캔 완료. [SRT] 자막을 넣거나, \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
-        // TODO: 키 입력 문구 변경 필요! api키가 필수가 아님!!
-        waitingEn.textContent = "Audio scanned. Load [SRT] subtitles, or enter API keys [🔑] to generate.";
-        waitingLine.style.opacity = '0.5';
+        krText = "오디오 스캔 완료. [SRT] 자막을 넣거나, \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
+        enText = "Audio scanned. Load [SRT] subtitles, or enter API keys [🔑] to generate.";
     } else if (!audioLoaded && (openaiKey && anthropicKey)) {
-        // 키만 있고 오디오가 없을 때
-        waitingKr.textContent = "API 키 입력 확인. \n[AUDIO] 폴더를 눌러 오디오를 넣으세요.";
-        waitingEn.textContent = "Keys verified. Press [AUDIO] to inject audio data.";
-        waitingLine.style.opacity = '0.5';
+        krText = "API 키 인식 완료. \n[AUDIO] 폴더를 눌러 오디오를 넣으세요.";
+        enText = "Keys verified. Press [AUDIO] to inject audio data.";
     } else {
-        // 둘 다 없을 때 (초기 상태)
-        waitingKr.textContent = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, [🔑]로 번역 회로를 연결하세요.";
-        waitingEn.textContent = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
-        waitingLine.style.opacity = '0.5';
+        krText = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, \n[🔑]로 번역 회로를 연결하세요.";
+        enText = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
+    }
+
+    // HTML 화면에 쏴주기
+    area.innerHTML = `
+        <div class="subtitle-line active" style="text-align: center; background: transparent; padding: 0;">
+          <div style="opacity: 0.5;">
+            <div class="subtitle-kr">${krText}</div>
+            <div class="subtitle-en">${enText}</div>
+          </div>
+          <div style="margin-top: 10px;">${btnHtml}</div>
+        </div>
+    `;
+
+    // 🌟 렌더링 된 버튼에 클릭 이벤트 달아주기
+    const inlineBtn = document.getElementById('inlineGenerateBtn');
+    if (inlineBtn) {
+        inlineBtn.addEventListener('click', runSubtitleGeneration);
     }
 }
+
+// ── 페이지 첫 로드 시 대기 화면 한 번 그려주기 ──
+updateWaitingMessage();

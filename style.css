@@ -564,3 +564,36 @@
 .modal-btn.confirm:hover {
   background: var(--black);
 }
+
+/* ── 중앙 자막 생성 버튼 디자인 ── */
+.inline-generate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--charcoal);
+  color: var(--cream);
+  border: none;
+  padding: 14px 32px;
+  border-radius: 40px;
+  font-family: var(--font-kr);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background 0.15s, transform 0.1s;
+  /* box-shadow: 0 4px 12px rgba(0,0,0,0.15); */
+}
+.inline-generate-btn:hover {
+  background: var(--black);
+  transform: translateY(-2px);
+}
+.inline-generate-btn:active {
+  transform: translateY(0px);
+}
+
+/* ── 중앙 버튼 속 SVG 아이콘 ── */
+.btn-svg-icon {
+  width: 20px;
+  height: 20px;
+}
