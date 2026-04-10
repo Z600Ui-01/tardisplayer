@@ -487,7 +487,6 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: 4px 4px 0px rgba(49, 50, 44, 0.2);
 }
 .modal-title {
   font-family: var(--font-en);
