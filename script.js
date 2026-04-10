@@ -910,27 +910,27 @@ function updateWaitingMessage() {
     const area = document.querySelector('.subtitle-area');
     area.style.justifyContent = 'center';
 
-    let krText = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, [🔑]로 번역 회로를 연결하세요.";
-    let enText = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
+    let krText = "자막 물질화 대기 중";
+    let enText = "Waiting for subtitle materialization...";
     let btnHtml = "";
 
     // 조건에 따라 텍스트와 버튼 렌더링 변경
     if (audioLoaded && openaiKey && anthropicKey) {
-        krText = "자막 물질화 준비 완료! \n자막을 생성하거나 \n[SRT] 자막을 로드하세요.";
-        enText = "Translation circuits connected and ready. \nPress [GENERATE] or load an [SRT] file.";
+        krText = "자막 물질화 준비 완료! \n자막 생성 시작하기 버튼을 누르거나 \nSRT 파일을 불러오세요.";
+        enText = "Translation circuits connected and ready.";
         // 🌟 오디오와 키가 모두 세팅되었을 때만 예쁜 생성 버튼 등장!
         btnHtml = `<button id="inlineGenerateBtn" class="inline-generate-btn">
              <img src="icons/generate.svg" class="btn-svg-icon" alt=""> 자막 생성 시작하기
            </button>`;
     } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
-        krText = "오디오 스캔 완료. [SRT] 자막을 넣거나, \n우측 상단의 [🔑]을 눌러 API 키를 입력하세요.";
-        enText = "Audio scanned. Load [SRT] subtitles, or enter API keys [🔑] to generate.";
+        krText = "오디오 스캔 완료. SRT 파일을 불러오거나, \n우측 상단의 열쇠 아이콘을 눌러 API 키를 입력하세요.";
+        enText = "Audio scanned.";
     } else if (!audioLoaded && (openaiKey && anthropicKey)) {
-        krText = "API 키 인식 완료. \n[AUDIO] 폴더를 눌러 오디오를 넣으세요.";
-        enText = "Keys verified. Press [AUDIO] to inject audio data.";
+        krText = "API 키 인식 완료. \nAUDIO 폴더를 눌러 오디오를 불러오세요.";
+        enText = "Keys verified.";
     } else {
-        krText = "자막 물질화 대기 중... \n[AUDIO]나 [SRT]를 로드하거나, \n[🔑]로 번역 회로를 연결하세요.";
-        enText = "Waiting for subtitle materialization... \nLoad [AUDIO]/[SRT], or connect circuits via [🔑].";
+        krText = "자막 물질화 대기 중";
+        enText = "Waiting for subtitle materialization...";
     }
 
     // HTML 화면에 쏴주기
