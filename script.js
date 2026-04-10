@@ -47,7 +47,7 @@ const coreVocab = `TARDIS, Time Lord, Gallifrey, Sonic Screwdriver, Jelly Baby, 
 // 에피소드마다 바꿔주는 전용 고유명사 (인물 이름, 행성 이름 등)
 const episodeVocab = '';
 // 컴패니언 이름
-const campanionVocab = 'Sarah, Leela, Romana, K-9, K9, Adric, brigadier, Lethbridge-Stewart,';
+const campanionVocab = `Sarah, Leela, Romana, K-9, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
 const whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
 
