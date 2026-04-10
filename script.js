@@ -165,16 +165,19 @@ async function transcribeAll(files) {
     // 1. 보내기 전에 미리 전수조사!
     for (let i = 0; i < files.length; i++) {
         if (files[i].size > MAX_SIZE) {
-            oversizedFiles.push(`${i + 1}번 파일 (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
+            // 💡 "n번 파일 [파일명.mp3] (28.0MB)" 형식으로 보기 좋게 수정!
+            oversizedFiles.push(`${i + 1}번 파일 [${files[i].name}] (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
         }
     }
 
     // 2. 범인이 있다면 즉시 중단하고 안내
     if (oversizedFiles.length > 0) {
-        alert(`🚨 타디스 과부하 발생!\n\n다음 파일이 OpenAI 제한(25MB)을 초과했습니다:\n- ${oversizedFiles.join('\n- ')}\n\n파일을 더 작게 쪼개서 다시 업로드해주세요!`);
-        throw new Error("파일 용량 초과로 중단됨"); // 실행 멈춤
+        alert(`🚨 타디스 과부하 발생!\n\n다음 파일이 OpenAI 제한(25MB)을 초과했습니다:\n- ${oversizedFiles.join('\n- ')}\n\n파일을 20MB 이하로 쪼개서 다시 업로드해주세요!`);
+        
+        // 🚨 이름표를 붙여서 에러 던지기! (아래 catch 블록이 알아볼 수 있게)
+        throw new Error("FILE_TOO_LARGE"); 
     }
-    
+
     let allSubs = [];
     let offset = 0;
 
@@ -893,7 +896,11 @@ document.getElementById('generateBtn').addEventListener('click', async () => {
             setTitle(name);
         } catch (error) {
             console.error('번역 중 에러 발생:', error);
-            alert('자막 생성에 실패했습니다.\n\n[가능성 높은 원인]\n1. API 키를 잘못 입력했거나 만료됨\n2. 오디오 파일에 음성이 없음\n\n우측 상단의 열쇠(🔑) 버튼을 눌러 API 키가 정확한지 다시 확인해 보세요!');
+            
+            // 🚨 [추가된 부분] 용량 초과 에러가 '아닐 때만' 기존 API 경고창 띄우기!
+            if (error.message !== "FILE_TOO_LARGE") {
+                alert('자막 생성에 실패했습니다.\n\n[가능성 높은 원인]\n1. API 키를 잘못 입력했거나 만료됨\n2. 오디오 파일에 음성이 없음\n\n우측 상단의 열쇠(🔑) 버튼을 눌러 API 키가 정확한지 다시 확인해 보세요!');
+            }
 
             // 에러가 났을 때 안내 문구 원상복구
             subtitles = []; 
