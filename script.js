@@ -935,7 +935,7 @@ function updateWaitingMessage() {
 
     // HTML 화면에 쏴주기
     area.innerHTML = `
-    <div class="subtitle-line active" style="text-align: center;">
+    <div class="subtitle-line active" style="text-align: center; background: transparent;">
         <div class="subtitle-kr" style="color: var(--warm-gray);">${krText}</div>
         <div class="subtitle-en" style="color: var(--border);">${enText}</div>
         ${btnHtml ? `<div style="margin-top: 10px;">${btnHtml}</div>` : ''}
