@@ -522,7 +522,6 @@ audioInput.addEventListener('change', async e => {
     if (!files.length) return;
     files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     tracks = files;
-    audioIcon.style.background = 'var(--blue)';
     const name = files.length > 1
         ? files[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (files.length - 1) + '트랙'
         : files[0].name.replace(/\.[^.]+$/, '').toUpperCase();
@@ -831,7 +830,6 @@ function secToSrtTime(sec) {
 document.getElementById('srtInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
-    document.getElementById('srtIcon').style.background = 'var(--light-blue)';
     const reader = new FileReader();
     reader.onload = ev => {
         const subs = parseSRT(ev.target.result);
