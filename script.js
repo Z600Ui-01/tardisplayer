@@ -109,19 +109,6 @@ async function transcribeTrack(file, offsetSec) {
     }
 
     const raw = data.segments
-        .filter(seg => {
-            // no_speech 필터 (느슨하게 0.8)
-            if ((seg.no_speech_prob || 0) >= 0.8) {
-                console.log('no_speech 필터:', (seg.no_speech_prob || 0).toFixed(2), seg.text);
-                return false;
-            }
-            // 30초 이상 segment 필터
-            if (seg.end - seg.start > 30) {
-                console.log('긴 segment 필터:', (seg.end - seg.start).toFixed(1) + '초', seg.text);
-                return false;
-            }
-            return true;
-        })
         .map(seg => {
             // word 타임스탬프로 싱크 보정
             let start = seg.start + offsetSec;
