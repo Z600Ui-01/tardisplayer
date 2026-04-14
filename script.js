@@ -51,19 +51,6 @@ const campanionVocab = `Sarah, Leela, Romana, K-9, K9, Adric, brigadier, Lethbri
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
 const whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
 
-// const claudeSystemPrompt = `너는 닥터후 오디오 드라마 자막 번역기야. 영어를 한국어로 번역해.
-// - 캐릭터의 성격과 관계에 맞는 자연스러운 구어체 한국어
-// - 주인공으로 나오는 닥터와 컴패니언의 성격을 반영한 번역
-// - 닥터는 컴패니언에게 반말 사용, 그 외의 관계에서는 상황에 적절하게
-// - 컴패니언은 특수한 상황이 아니면 닥터에게 존댓말을 사용
-// - 감정이 실린 대사는 직역보다 감정 전달 우선
-// - 조연끼리의 위계와 관계도 고려해서 반말과 존댓말을 적절하게 사용
-// - 빌런 캐릭터는 빌런에게 어울리는 말투를 사용
-// - 영국식 유머와 말장난은 한국어에서도 재치있게 살릴 것
-// - 고유명사(타디스, 소닉 드라이버, 달렉, 마스터 등)는 그대로 유지
-// - 한 번호에 여러 화자의 대사가 있으면 / 로 구분해서 번역
-// - 입력된 번호 하나당 번역 결과도 정확히 하나. 여러 번호를 합치거나 하나를 쪼개지 말 것
-// - 번호|번역 형식 외의 텍스트 출력 금지`;
 const claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
 Follow these rules strictly:
 - Tone & Relationship: Use natural, conversational Korean reflecting the characters' personalities.
@@ -74,6 +61,7 @@ Follow these rules strictly:
 - Emotion & Nuance: Prioritize emotional delivery and context over literal, word-for-word translation.
 - British Humor: Adapt British humor, idioms, and puns wittily into natural Korean.
 - Proper Nouns: Maintain terms like 타디스(TARDIS), 소닉 스크류드라이버(Sonic Screwdriver), 달렉(Dalek), 마스터(Master), 젤리베이비(Jelly Baby).
+- Never translate "you" as "선생님". Use "당신", or omit naturally as Korean often does
 - Multiple Speakers: If multiple speakers share a single subtitle number, separate their lines using a slash (/).
 - STRICT FORMATTING: Maintain a strict 1:1 mapping between input and output numbers. NEVER merge or split numbers.
 - OUTPUT FORMAT: You must ONLY output in the "Number|Translated Text" format. No intro, no outro, no extra text.`;
@@ -147,17 +135,24 @@ async function transcribeTrack(file, offsetSec) {
     const sentenceEnd = /[.?!]$|—$|--$|\.\.\.$/;
 
     // 1단계: 문장 중간에 잘린 segment → 다음 segment에 합치기
-    const merged = [];
-    for (let i = 0; i < filtered.length; i++) {
-        const seg = filtered[i];
-        if (merged.length > 0 && !sentenceEnd.test(merged[merged.length - 1].text.trim())) {
-            const prev = merged[merged.length - 1];
+const merged = [];
+for (let i = 0; i < filtered.length; i++) {
+    const seg = filtered[i];
+    if (merged.length > 0 && !sentenceEnd.test(merged[merged.length - 1].text.trim())) {
+        const prev = merged[merged.length - 1];
+        const gap = seg.start - prev.end;
+        // 간격이 0.5초 이상이면 문장부호 없어도 별개 대사로 취급
+        if (gap < 0.5) {
             prev.text = prev.text.trim() + ' ' + seg.text.trim();
             prev.end = seg.end;
+            if (seg.words) prev.words = (prev.words || []).concat(seg.words);
         } else {
             merged.push({ ...seg });
         }
+    } else {
+        merged.push({ ...seg });
     }
+}
 
     // 2단계: 뭉친 segment → 문장부호 기준으로 쪼개기 (word 타임스탬프 활용)
     const split = [];
@@ -301,7 +296,9 @@ async function translateSubtitles(subs) {
                 // 🚨 API 에러 감지!
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                    throw new Error(`Anthropic 에러 (${res.status}): ${errData.error?.message || '키 오류 또는 문제 발생'}`);
+                        if (err.message.includes('401') || err.message.includes('403')) {
+                        throw err; 
+                    }
                 }
 
                 const data = await res.json();
