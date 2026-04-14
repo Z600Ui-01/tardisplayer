@@ -163,29 +163,9 @@ async function transcribeTrack(file, offsetSec) {
 
     const sentenceEnd = /[.?!]$|—$|--$|\.\.\.$/;
 
-    // 1단계: 문장 중간에 잘린 segment → 다음 segment에 합치기
-const merged = [];
-for (let i = 0; i < filtered.length; i++) {
-    const seg = filtered[i];
-    if (merged.length > 0 && !sentenceEnd.test(merged[merged.length - 1].text.trim())) {
-        const prev = merged[merged.length - 1];
-        const gap = seg.start - prev.end;
-        // 간격이 0.5초 이상이면 문장부호 없어도 별개 대사로 취급
-        if (gap < 0.5) {
-            prev.text = prev.text.trim() + ' ' + seg.text.trim();
-            prev.end = seg.end;
-            if (seg.words) prev.words = (prev.words || []).concat(seg.words);
-        } else {
-            merged.push({ ...seg });
-        }
-    } else {
-        merged.push({ ...seg });
-    }
-}
-
-    // 2단계: 뭉친 segment → 문장부호 기준으로 쪼개기 (word 타임스탬프 활용)
+    // 뭉친 segment → 문장부호 기준으로 쪼개기
     const split = [];
-    for (const seg of merged) {
+    for (const seg of filtered) {
         // word 데이터가 없으면 쪼갤 수 없으니 그대로
         if (!seg.words || seg.words.length === 0) {
             split.push(seg);
@@ -380,46 +360,45 @@ async function translateSubtitles(subs) {
 
     // 최종 누락분 재시도
     const missed = subs.filter(s => !s.kr);
-    if (missed.length > 0 && missed.length < 20) {
-        const numberedLines = missed.map(s => (subs.indexOf(s) + 1) + '|' + s.text).join('\n---\n');
-        setTitle('최종 누락분 ' + missed.length + '개 재번역...');
-        try {
-            const res = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': anthropicKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
-                    // model: 'claude-3-5-haiku-latest',
-                    max_tokens: 4096,
-                    
-                    // 캐싱 적용
-                    system: [
-                        {
+    if (missed.length > 0) {
+        const batchSize = 25;
+        for (let i = 0; i < missed.length; i += batchSize) {
+            const batch = missed.slice(i, i + batchSize);
+            const numberedLines = batch.map(s => (subs.indexOf(s) + 1) + '|' + s.text).join('\n---\n');
+            setTitle('최종 누락분 ' + (i + 1) + '-' + Math.min(i + batchSize, missed.length) + '/' + missed.length + ' 재번역...');
+            try {
+                const res = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': anthropicKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 4096,
+                        system: [{
                             type: "text",
                             text: claudeSystemPrompt,
                             cache_control: { type: "ephemeral" }
-                        }
-                    ],
-                    messages: [{
-                        role: 'user',
-                        content: '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n\n' + numberedLines
-                    }]
-                })
-            });
-            const data = await res.json();
-            data.content[0].text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
-                const match = line.match(/^(\d+)\|(.+)/);
-                if (match) {
-                    const idx = parseInt(match[1]) - 1;
-                    if (idx >= 0 && idx < subs.length) subs[idx].kr = match[2].trim();
-                }
-            });
-        } catch (err) { }
+                        }],
+                        messages: [{
+                            role: 'user',
+                            content: '다음 자막을 한국어로 번역해.\n규칙: 각 번호는 ---로 구분된 독립된 대사임. 번호 하나당 번역 결과도 정확히 하나. 절대 합치지 말 것. 번호|번역 형식으로만 응답.\n\n' + numberedLines
+                        }]
+                    })
+                });
+                const data = await res.json();
+                data.content[0].text.split('\n').filter(l => l.match(/^\d+\|/)).forEach(line => {
+                    const match = line.match(/^(\d+)\|(.+)/);
+                    if (match) {
+                        const idx = parseInt(match[1]) - 1;
+                        if (idx >= 0 && idx < subs.length) subs[idx].kr = match[2].trim();
+                    }
+                });
+            } catch (err) { }
+        }
     }
 
     return subs;
