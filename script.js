@@ -110,7 +110,7 @@ async function transcribeTrack(file, offsetSec) {
         });
 
     // 중복/밀림 필터
-    const filtered = [];
+    let filtered = [];
     for (let i = 0; i < raw.length; i++) {
         const seg = raw[i];
         if (!seg.text) continue;
@@ -129,6 +129,35 @@ async function transcribeTrack(file, offsetSec) {
             .replace(/\bcanine\b/gi, 'K9')
             .replace(/\bK-9\b/g, 'K9');
     });
+
+    // ── 프롬프트 환청 필터 ──
+    const promptWords = new Set(
+        whisperPrompt.toLowerCase()
+            .split(/[,\s]+/)
+            .filter(w => w.length > 0)
+    );
+
+    filtered.forEach(seg => {
+        const words = seg.text.split(/\s+/);
+        let cutIndex = 0;
+        for (let i = 0; i < words.length; i++) {
+            const clean = words[i].toLowerCase().replace(/[.,!?'"]/g, '');
+            if (promptWords.has(clean)) {
+                cutIndex = i + 1;
+            } else {
+                break;
+            }
+        }
+        if (cutIndex > 0 && cutIndex < words.length) {
+            console.log('프롬프트 환청 트리밍:', words.slice(0, cutIndex).join(' '));
+            seg.text = words.slice(cutIndex).join(' ');
+        }
+        if (cutIndex >= words.length) {
+            console.log('프롬프트 환청 제거:', seg.text);
+            seg.text = '';
+        }
+    });
+    filtered = filtered.filter(seg => seg.text.length > 0);
 
     // ── 문장 단위 후처리 ──
 
@@ -293,12 +322,13 @@ async function translateSubtitles(subs) {
                     })
                 });
 
+
                 // 🚨 API 에러 감지!
                 if (!res.ok) {
                     const errData = await res.json().catch(() => ({}));
-                        if (err.message.includes('401') || err.message.includes('403')) {
-                        throw err; 
-                    }
+                   const status = res.status;
+                 const msg = errData.error?.message || '키 오류 또는 문제 발생';
+                 throw new Error(`Anthropic 에러 (${status}): ${msg}`);
                 }
 
                 const data = await res.json();
@@ -339,16 +369,12 @@ async function translateSubtitles(subs) {
                     success = true;
                 }
             } catch (err) {
-                console.error('번역 배치 실패:', i, err);
-                // 🚨 1. 키가 틀렸거나 요금이 없는 '치명적 에러' (401, 403)
-                // -> 어차피 계속해봤자 안 되니까 즉시 파업! (이땐 결제 전이라 토큰 안 깎임)
-                if (err.message.includes('401') || err.message.includes('403') || err.message.includes('에러')) {
-                    throw err; 
+                  console.error('번역 배치 실패:', i, err);
+                  if (err.message.includes('401') || err.message.includes('403')) {
+                      throw err; 
+                  }
+                  if (attempts >= 3) success = true;
                 }
-                // 🌟 2. Claude가 양식을 안 지키거나 통신이 일시적으로 끊긴 '단순 에러'
-                // -> 토큰 낭비를 막기 위해 3번 시도 후 '스킵'하고 다음 대사로 진행!
-                if (attempts >= 3) success = true;
-            }
         }
     }
 
