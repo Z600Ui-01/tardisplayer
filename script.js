@@ -74,7 +74,6 @@ Follow these rules strictly:
 - Emotion & Nuance: Prioritize emotional delivery and context over literal, word-for-word translation.
 - British Humor: Adapt British humor, idioms, and puns wittily into natural Korean.
 - Proper Nouns: Maintain terms like 타디스(TARDIS), 소닉 스크류드라이버(Sonic Screwdriver), 달렉(Dalek), 마스터(Master), 젤리베이비(Jelly Baby).
-- The Master often hides their identity. NEVER insert "마스터" unless the original English text explicitly contains "Master". When "you" refers to the Master, other characters should use "당신" and the Doctor should use "너".
 - Multiple Speakers: If multiple speakers share a single subtitle number, separate their lines using a slash (/).
 - STRICT FORMATTING: Maintain a strict 1:1 mapping between input and output numbers. NEVER merge or split numbers.
 - OUTPUT FORMAT: You must ONLY output in the "Number|Translated Text" format. No intro, no outro, no extra text.`;
@@ -194,40 +193,6 @@ async function transcribeTrack(file, offsetSec) {
             });
         }
     }
-
-    // ── 프롬프트 환청 필터 ──
-const promptWords = new Set(
-    whisperPrompt.toLowerCase()
-        .split(/[,\s]+/)
-        .filter(w => w.length > 0)
-);
-
-filtered.forEach(seg => {
-    const words = seg.text.split(/\s+/);
-    // 앞에서부터 프롬프트 단어가 연속되는 구간 찾기
-    let cutIndex = 0;
-    for (let i = 0; i < words.length; i++) {
-        const clean = words[i].toLowerCase().replace(/[.,!?'"]/g, '');
-        if (promptWords.has(clean)) {
-            cutIndex = i + 1;
-        } else {
-            break;
-        }
-    }
-    // 앞쪽에 환청이 있고, 뒤에 실제 대사가 남아있으면 → 환청만 제거
-    if (cutIndex > 0 && cutIndex < words.length) {
-        console.log('프롬프트 환청 트리밍:', words.slice(0, cutIndex).join(' '));
-        seg.text = words.slice(cutIndex).join(' ');
-    }
-    // 전부 프롬프트 단어면 통째로 제거 표시
-    if (cutIndex >= words.length) {
-        console.log('프롬프트 환청 제거:', seg.text);
-        seg.text = '';
-    }
-});
-
-// 빈 텍스트 제거
-filtered = filtered.filter(seg => seg.text.length > 0);
 
     return split;
 
