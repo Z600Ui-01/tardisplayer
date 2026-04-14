@@ -196,6 +196,40 @@ async function transcribeTrack(file, offsetSec) {
         }
     }
 
+    // ── 프롬프트 환청 필터 ──
+const promptWords = new Set(
+    whisperPrompt.toLowerCase()
+        .split(/[,\s]+/)
+        .filter(w => w.length > 0)
+);
+
+filtered.forEach(seg => {
+    const words = seg.text.split(/\s+/);
+    // 앞에서부터 프롬프트 단어가 연속되는 구간 찾기
+    let cutIndex = 0;
+    for (let i = 0; i < words.length; i++) {
+        const clean = words[i].toLowerCase().replace(/[.,!?'"]/g, '');
+        if (promptWords.has(clean)) {
+            cutIndex = i + 1;
+        } else {
+            break;
+        }
+    }
+    // 앞쪽에 환청이 있고, 뒤에 실제 대사가 남아있으면 → 환청만 제거
+    if (cutIndex > 0 && cutIndex < words.length) {
+        console.log('프롬프트 환청 트리밍:', words.slice(0, cutIndex).join(' '));
+        seg.text = words.slice(cutIndex).join(' ');
+    }
+    // 전부 프롬프트 단어면 통째로 제거 표시
+    if (cutIndex >= words.length) {
+        console.log('프롬프트 환청 제거:', seg.text);
+        seg.text = '';
+    }
+});
+
+// 빈 텍스트 제거
+filtered = filtered.filter(seg => seg.text.length > 0);
+
     return split;
 
 }
