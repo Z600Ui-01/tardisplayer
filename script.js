@@ -87,6 +87,7 @@ async function transcribeTrack(file, offsetSec) {
     formData.append('timestamp_granularities[]', 'segment');
     formData.append('timestamp_granularities[]', 'word');
     formData.append('language', 'en');
+    formData.append('temperature', '0');
     if (whisperPrompt) formData.append('prompt', whisperPrompt);
 
     const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -117,7 +118,7 @@ async function transcribeTrack(file, offsetSec) {
                 start = seg.words[0].start + offsetSec;
                 end = seg.words[seg.words.length - 1].end + offsetSec;
             }
-            return { start, end, text: seg.text.trim() };
+            return { start, end, text: seg.text.trim(), words: seg.words || [] };
         });
 
     // 중복/밀림 필터
@@ -141,7 +142,60 @@ async function transcribeTrack(file, offsetSec) {
             .replace(/\bK-9\b/g, 'K9');
     });
 
-    return filtered;
+    // ── 문장 단위 후처리 ──
+
+    const sentenceEnd = /[.?!]$|—$|--$|\.\.\.$/;
+
+    // 1단계: 문장 중간에 잘린 segment → 다음 segment에 합치기
+    const merged = [];
+    for (let i = 0; i < filtered.length; i++) {
+        const seg = filtered[i];
+        if (merged.length > 0 && !sentenceEnd.test(merged[merged.length - 1].text.trim())) {
+            const prev = merged[merged.length - 1];
+            prev.text = prev.text.trim() + ' ' + seg.text.trim();
+            prev.end = seg.end;
+        } else {
+            merged.push({ ...seg });
+        }
+    }
+
+    // 2단계: 뭉친 segment → 문장부호 기준으로 쪼개기 (word 타임스탬프 활용)
+    const split = [];
+    for (const seg of merged) {
+        // word 데이터가 없으면 쪼갤 수 없으니 그대로
+        if (!seg.words || seg.words.length === 0) {
+            split.push(seg);
+            continue;
+        }
+
+        let buf = [];
+        let bufStart = seg.start;
+
+        for (const w of seg.words) {
+            buf.push(w);
+            if (sentenceEnd.test(w.word.trim())) {
+                split.push({
+                    start: bufStart,
+                    end: w.end + offsetSec,
+                    text: buf.map(b => b.word).join('').trim()
+                });
+                bufStart = w.end + offsetSec;
+                buf = [];
+            }
+        }
+
+        // 버퍼에 남은 단어 (마지막 문장부호 없이 끝난 경우)
+        if (buf.length > 0) {
+            split.push({
+                start: bufStart,
+                end: seg.end,
+                text: buf.map(b => b.word).join('').trim()
+            });
+        }
+    }
+
+    return split;
+
 }
 
 // ── 여러 트랙 처리 ──
