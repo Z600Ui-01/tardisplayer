@@ -75,7 +75,7 @@ async function transcribeTrack(file, offsetSec) {
     formData.append('timestamp_granularities[]', 'segment');
     formData.append('timestamp_granularities[]', 'word');
     formData.append('language', 'en');
-    formData.append('temperature', '0');
+    formData.append('temperature', '0.3');
     if (whisperPrompt) formData.append('prompt', whisperPrompt);
 
     const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -158,6 +158,15 @@ async function transcribeTrack(file, offsetSec) {
         }
     });
     filtered = filtered.filter(seg => seg.text.length > 0);
+
+    // ── to be continued 환청 제거 ──
+filtered = filtered.filter(seg => {
+    if (seg.text.trim().toLowerCase().replace(/\.+$/, '') === 'to be continued') {
+        console.log('환청 제거:', seg.text);
+        return false;
+    }
+    return true;
+});
 
     // ── 문장 단위 후처리 ──
 
@@ -873,12 +882,22 @@ function secToSrtTime(sec) {
 document.getElementById('srtInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
+
+    if (subtitles.length > 0) {
+        const replace = confirm('기존 자막이 있습니다. 새 파일로 교체할까요?');
+        if (!replace) {
+            e.target.value = '';
+            return;
+        }
+    }
+
     const reader = new FileReader();
     reader.onload = ev => {
         const subs = parseSRT(ev.target.result);
         renderSubtitles(subs);
     };
     reader.readAsText(file);
+    e.target.value = '';
 });
 
 // ── 수동 자막 생성 로직  ──
