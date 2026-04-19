@@ -274,7 +274,7 @@ async function translateSubtitles(subs) {
         const numberedLines = batch.map((s, j) => (i + j + 1) + '|' + s.text).join('\n---\n');
         const expectedCount = batch.length;
 
-        setTitle('번역 중 ' + (i + 1) + '-' + Math.min(i + batchSize, subs.length) + '/' + subs.length + '...');
+        setTitle('TRANSLATING ' + (i + 1) + '-' + Math.min(i + batchSize, subs.length) + '/' + subs.length + '...');
 
         let attempts = 0;
         let success = false;
@@ -374,7 +374,7 @@ async function translateSubtitles(subs) {
         for (let i = 0; i < missed.length; i += batchSize) {
             const batch = missed.slice(i, i + batchSize);
             const numberedLines = batch.map(s => (subs.indexOf(s) + 1) + '|' + s.text).join('\n---\n');
-            setTitle('최종 누락분 ' + (i + 1) + '-' + Math.min(i + batchSize, missed.length) + '/' + missed.length + ' 재번역...');
+            setTitle('RETRY ' + (i + 1) + '-' + Math.min(i + batchSize, missed.length) + '/' + missed.length + ' REMAINING...');
             try {
                 const res = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
