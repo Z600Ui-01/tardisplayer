@@ -575,7 +575,7 @@ audioInput.addEventListener('change', async e => {
     files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     tracks = files;
     const name = files.length > 1
-        ? files[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (files.length - 1) + '트랙'
+        ? files[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' + ' + (files.length - 1) + 'TRACKS'
         : files[0].name.replace(/\.[^.]+$/, '').toUpperCase();
     setTitle(name);
     const cover = document.getElementById('coverImg');
@@ -938,7 +938,7 @@ async function runSubtitleGeneration() {
             
             // 번역이 끝나면 타이틀바 원래 이름으로 복구
             const name = tracks.length > 1
-                ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (tracks.length - 1) + '트랙'
+                ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' + ' + (tracks.length - 1) + 'TRACKS'
                 : tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase();
             setTitle(name);
         } catch (error) {
@@ -955,7 +955,7 @@ async function runSubtitleGeneration() {
 
             // 🚨 타이틀바도 원래 오디오 이름으로 복구!
             const name = tracks.length > 1
-                ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' 외 ' + (tracks.length - 1) + '트랙'
+                ? tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase() + ' + ' + (tracks.length - 1) + 'TRACKS'
                 : tracks[0].name.replace(/\.[^.]+$/, '').toUpperCase();
             setTitle(name);
         }
