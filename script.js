@@ -43,15 +43,15 @@ const captureIcon = document.getElementById('captureIcon');
 
 // ── 프롬프트 ──
 // 항상 쓰이는 핵심 고유명사 (고정)
-const coreVocab = `TARDIS, Time Lord, Gallifrey, Sonic Screwdriver, Jelly Baby, Dalek, Davros, Cyberman, Sontaran, Zygon, The Master, Rassilon,`;
+const coreVocab = `TARDIS, Time Lord, Gallifrey, Sonic Screwdriver, Jelly Baby, Dalek, Davros, Cyberman, Sontaran, Zygon, The Master, Missy, Rassilon,`;
 // 에피소드마다 바꿔주는 전용 고유명사 (인물 이름, 행성 이름 등)
 const episodeVocab = '';
 // 컴패니언 이름
-const campanionVocab = `Sarah, Leela, Romana, K-9, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
+const campanionVocab = `Charley, Sarah, Leela, Romana, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
 const whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
 
-const claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
+let claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
 Follow these rules strictly:
 - Tone & Relationship: Use natural, conversational Korean reflecting the characters' personalities.
 - The Doctor -> Companion: Use informal language (반말/Banmal). For others, adjust appropriately by context.
@@ -61,7 +61,7 @@ Follow these rules strictly:
 - Emotion & Nuance: Prioritize emotional delivery and context over literal, word-for-word translation.
 - British Humor: Adapt British humor, idioms, and puns wittily into natural Korean.
 - Proper Nouns: Maintain terms like 타디스(TARDIS), 소닉 스크류드라이버(Sonic Screwdriver), 달렉(Dalek), 마스터(Master), 젤리베이비(Jelly Baby).
-- Never translate "you" as "선생님". Use "당신", or omit naturally as Korean often does
+- Never translate "you" as "선생님". Use "당신", or omit naturally as Korean often does.
 - Multiple Speakers: If multiple speakers share a single subtitle number, separate their lines using a slash (/).
 - STRICT FORMATTING: Maintain a strict 1:1 mapping between input and output numbers. NEVER merge or split numbers.
 - OUTPUT FORMAT: You must ONLY output in the "Number|Translated Text" format. No intro, no outro, no extra text.`;
@@ -1011,6 +1011,35 @@ function updateWaitingMessage() {
 
 // ── 페이지 첫 로드 시 대기 화면 한 번 그려주기 ──
 updateWaitingMessage();
+
+// ── 프롬프트 모달 로직 ──
+const defaultPrompt = claudeSystemPrompt;
+const promptModal = document.getElementById('promptModal');
+const promptTextarea = document.getElementById('promptTextarea');
+
+document.getElementById('promptBtn').addEventListener('click', () => {
+    promptTextarea.value = claudeSystemPrompt;
+    promptModal.classList.add('active');
+});
+
+document.getElementById('btnCancelPrompt').addEventListener('click', () => {
+    promptModal.classList.remove('active');
+});
+
+document.getElementById('btnConfirmPrompt').addEventListener('click', () => {
+    claudeSystemPrompt = promptTextarea.value.trim();
+    promptModal.classList.remove('active');
+});
+
+document.getElementById('btnResetPrompt').addEventListener('click', () => {
+    if (confirm('프롬프트를 초기 상태로 되돌릴까요?')) {
+        promptTextarea.value = defaultPrompt;
+    }
+});
+
+promptModal.addEventListener('click', (e) => {
+    if (e.target === promptModal) promptModal.classList.remove('active');
+});
 
 // ── 눈동자 아이콘 (SVG) 세팅 ──
 const eyeOpenSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;

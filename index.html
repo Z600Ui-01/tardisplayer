@@ -41,6 +41,13 @@
         <span class="upload-float-label">SRT</span>
       </div>
 
+      <div class="upload-float-btn" id="promptBtn">
+        <div class="upload-float-icon" id="promptIcon">
+          <img src="icons/capture.svg" width="100%" height="100%" alt="">
+        </div>
+        <span class="upload-float-label">PROMPT</span>
+      </div>
+
       <div class="upload-float-btn" id="screenshotBtn">
         <div class="upload-float-icon" id="captureIcon">
           <img src="icons/capture.svg" width="100%" height="100%" alt="">
@@ -209,6 +216,22 @@
       <div class="modal-actions">
         <button class="modal-btn cancel" id="btnCancelApi">취소</button>
         <button class="modal-btn confirm" id="btnConfirmApi">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="promptModal">
+    <div class="modal-box" style="width: 600px;">
+      <h2 class="modal-title">TRANSLATION PROMPT</h2>
+      <div class="modal-group">
+        <label>번역 시스템 프롬프트</label>
+        <textarea id="promptTextarea" rows="16"></textarea>
+        <p class="modal-desc">번역 시 Claude에게 전달되는 시스템 프롬프트입니다. 캐릭터 말투, 관계 설정 등을 자유롭게 수정하세요.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn cancel" id="btnResetPrompt">초기화</button>
+        <button class="modal-btn cancel" id="btnCancelPrompt">취소</button>
+        <button class="modal-btn confirm" id="btnConfirmPrompt">저장</button>
       </div>
     </div>
   </div>
