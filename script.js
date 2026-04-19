@@ -50,6 +50,12 @@ const episodeVocab = '';
 const campanionVocab = `Charley, Sarah, Leela, Romana, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
 let whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
+//모달에서 보여주는 용도
+const defaultWhisperDisplay = `[핵심 고유명사]\n${coreVocab}\n\n[컴패니언]\n${campanionVocab}\n\n[에피소드 전용]\n${episodeVocab}`;
+
+function displayToPrompt(text) {
+    return text.replace(/\[.*?\]/g, '').split(/[,\n]+/).map(s => s.trim()).filter(s => s.length > 0).join(', ');
+}
 
 let claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
 Follow these rules strictly:
@@ -1013,60 +1019,42 @@ function updateWaitingMessage() {
 updateWaitingMessage();
 
 // ── 프롬프트 모달 로직 ──
-// 위스퍼
 const whisperTextarea = document.getElementById('whisperTextarea');
 const defaultWhisperPrompt = whisperPrompt;
 
-// 열기 (기존 promptBtn 리스너 안에 추가)
-document.getElementById('promptBtn').addEventListener('click', () => {
-    promptTextarea.value = claudeSystemPrompt;
-    whisperTextarea.value = whisperPrompt;
-    promptModal.classList.add('active');
-});
-
-// 확인 (기존 btnConfirmPrompt 리스너 교체)
-document.getElementById('btnConfirmPrompt').addEventListener('click', () => {
-    claudeSystemPrompt = promptTextarea.value.trim();
-    whisperPrompt = whisperTextarea.value.trim();
-    localStorage.setItem('claudePrompt', claudeSystemPrompt);
-    localStorage.setItem('whisperPrompt', whisperPrompt);
-    promptModal.classList.remove('active');
-});
-
-// 초기화 (기존 btnResetPrompt 리스너 교체)
-document.getElementById('btnResetPrompt').addEventListener('click', () => {
-    if (confirm('프롬프트를 초기 상태로 되돌릴까요?')) {
-        promptTextarea.value = defaultPrompt;
-        whisperTextarea.value = defaultWhisperPrompt;
-    }
-});
+const defaultPrompt = claudeSystemPrompt;
+const promptModal = document.getElementById('promptModal');
+const promptTextarea = document.getElementById('promptTextarea');
 
 // 페이지 로드 시 복원
 const savedWhisperPrompt = localStorage.getItem('whisperPrompt');
 if (savedWhisperPrompt) whisperPrompt = savedWhisperPrompt;
 
-// 여기부터 클로드 프롬프트
-const defaultPrompt = claudeSystemPrompt;
-const promptModal = document.getElementById('promptModal');
-const promptTextarea = document.getElementById('promptTextarea');
+const savedClaudePrompt = localStorage.getItem('claudePrompt');
+if (savedClaudePrompt) claudeSystemPrompt = savedClaudePrompt;
 
+// 열기
 document.getElementById('promptBtn').addEventListener('click', () => {
     promptTextarea.value = claudeSystemPrompt;
+    whisperTextarea.value = localStorage.getItem('whisperDisplay') || defaultWhisperDisplay;  // ← 이 줄
     promptModal.classList.add('active');
 });
 
-document.getElementById('btnCancelPrompt').addEventListener('click', () => {
-    promptModal.classList.remove('active');
-});
-
+// 확인
 document.getElementById('btnConfirmPrompt').addEventListener('click', () => {
     claudeSystemPrompt = promptTextarea.value.trim();
+    const displayText = whisperTextarea.value.trim();
+    whisperPrompt = displayToPrompt(displayText);
+    localStorage.setItem('claudePrompt', claudeSystemPrompt);
+    localStorage.setItem('whisperPrompt', whisperPrompt);
+    localStorage.setItem('whisperDisplay', displayText);
     promptModal.classList.remove('active');
 });
-
+// 초기화
 document.getElementById('btnResetPrompt').addEventListener('click', () => {
     if (confirm('프롬프트를 초기 상태로 되돌릴까요?')) {
         promptTextarea.value = defaultPrompt;
+        whisperTextarea.value = defaultWhisperDisplay;
     }
 });
 
