@@ -224,6 +224,11 @@
     <div class="modal-box" style="width: 600px;">
       <h2 class="modal-title">TRANSLATION PROMPT</h2>
       <div class="modal-group">
+        <label>STT 고유명사 힌트</label>
+        <textarea id="whisperTextarea" rows="4"></textarea>
+        <p class="modal-desc">캐릭터 이름, 행성 이름 등 고유명사를 쉼표로 구분해서 입력하세요. STT 인식 정확도가 올라갑니다.</p>
+      </div>
+      <div class="modal-group">
         <label>번역 시스템 프롬프트</label>
         <textarea id="promptTextarea" rows="16"></textarea>
         <p class="modal-desc">번역 시 Claude에게 전달되는 시스템 프롬프트입니다. 캐릭터 말투, 관계 설정 등을 자유롭게 수정하세요.</p>

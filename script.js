@@ -49,7 +49,7 @@ const episodeVocab = '';
 // 컴패니언 이름
 const campanionVocab = `Charley, Sarah, Leela, Romana, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
-const whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
+let whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
 
 let claudeSystemPrompt = `You are an expert subtitle translator for Doctor Who audio dramas. Translate English to Korean.
 Follow these rules strictly:
@@ -1013,6 +1013,39 @@ function updateWaitingMessage() {
 updateWaitingMessage();
 
 // ── 프롬프트 모달 로직 ──
+// 위스퍼
+const whisperTextarea = document.getElementById('whisperTextarea');
+const defaultWhisperPrompt = whisperPrompt;
+
+// 열기 (기존 promptBtn 리스너 안에 추가)
+document.getElementById('promptBtn').addEventListener('click', () => {
+    promptTextarea.value = claudeSystemPrompt;
+    whisperTextarea.value = whisperPrompt;
+    promptModal.classList.add('active');
+});
+
+// 확인 (기존 btnConfirmPrompt 리스너 교체)
+document.getElementById('btnConfirmPrompt').addEventListener('click', () => {
+    claudeSystemPrompt = promptTextarea.value.trim();
+    whisperPrompt = whisperTextarea.value.trim();
+    localStorage.setItem('claudePrompt', claudeSystemPrompt);
+    localStorage.setItem('whisperPrompt', whisperPrompt);
+    promptModal.classList.remove('active');
+});
+
+// 초기화 (기존 btnResetPrompt 리스너 교체)
+document.getElementById('btnResetPrompt').addEventListener('click', () => {
+    if (confirm('프롬프트를 초기 상태로 되돌릴까요?')) {
+        promptTextarea.value = defaultPrompt;
+        whisperTextarea.value = defaultWhisperPrompt;
+    }
+});
+
+// 페이지 로드 시 복원
+const savedWhisperPrompt = localStorage.getItem('whisperPrompt');
+if (savedWhisperPrompt) whisperPrompt = savedWhisperPrompt;
+
+// 여기부터 클로드 프롬프트
 const defaultPrompt = claudeSystemPrompt;
 const promptModal = document.getElementById('promptModal');
 const promptTextarea = document.getElementById('promptTextarea');
