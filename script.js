@@ -136,6 +136,21 @@ async function transcribeTrack(file, offsetSec) {
             .replace(/\bK-9\b/g, 'K9');
     });
 
+    filtered.forEach(seg => {
+    // 단어 연속 반복 8번 이상 → 제거
+    seg.text = seg.text
+        .replace(/(\b\w+\b)(?:\s+\1){7,}/gi, '')
+        .replace(/([\uAC00-\uD7A3])\1{7,}/g, '')
+        .trim();
+    
+    // 구문 반복 8번 이상 → 제거
+    seg.text = seg.text
+        .replace(/(.{4,}?[.!?])\s*(\1\s*){7,}/gi, '')
+        .trim();
+});
+
+filtered = filtered.filter(seg => seg.text.length > 0);
+
     // ── 프롬프트 환청 필터 ──
     const promptWords = new Set(
         whisperPrompt.toLowerCase()
