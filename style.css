@@ -520,17 +520,17 @@
 }
 .modal-group input {
   padding: 10px 12px;
-  border: 1px solid var(--charcoal);
+  border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
-  font-family: var(--font-en), monospace;
+  font-family: var(--font-kr), monospace;
   font-size: 14px;
   color: var(--charcoal);
   outline: none;
 }
-.modal-group input:focus {
+.modal-group input:focus,
+.modal-group textarea:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 2px var(--light-blue);
 }
 .modal-desc {
   font-family: var(--font-kr);
@@ -638,9 +638,9 @@
 /* ── 프롬프트 모달 textarea ── */
 .modal-group textarea {
   padding: 10px 12px;
-  border: 1px solid var(--charcoal);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--scherzo);
   font-family: var(--font-kr);
   font-size: 13px;
   line-height: 1.6;
@@ -650,5 +650,4 @@
 }
 .modal-group textarea:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 2px var(--light-blue);
 }
