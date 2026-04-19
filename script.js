@@ -1058,6 +1058,10 @@ document.getElementById('btnResetPrompt').addEventListener('click', () => {
     }
 });
 
+document.getElementById('btnCancelPrompt').addEventListener('click', () => {
+    promptModal.classList.remove('active');
+});
+
 promptModal.addEventListener('click', (e) => {
     if (e.target === promptModal) promptModal.classList.remove('active');
 });
