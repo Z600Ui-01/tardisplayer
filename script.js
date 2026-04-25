@@ -152,6 +152,17 @@ async function transcribeTrack(file, offsetSec) {
     seg.text = seg.text
         .replace(/(.{4,}?[.!?])\s*(\1\s*){7,}/gi, '')
         .trim();
+
+    // 동일 구문 반복 환청 감지 (숫자 제거 후 같은 구문이 5번 이상 반복)
+    const stripped = seg.text.replace(/\d+/g, '').trim();
+    const phrases = stripped.split(/[,.]/).map(s => s.trim()).filter(s => s.length > 0);
+    if (phrases.length >= 5) {
+        const unique = new Set(phrases);
+        if (unique.size <= 2) {
+            console.log('구문 반복 환청 제거:', seg.text.slice(0, 50) + '...');
+            seg.text = '';
+        }
+    }
 });
 
 filtered = filtered.filter(seg => seg.text.length > 0);
