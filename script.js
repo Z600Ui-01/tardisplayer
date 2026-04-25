@@ -68,6 +68,7 @@ Follow these rules strictly:
 - British Humor: Adapt British humor, idioms, and puns wittily into natural Korean.
 - Proper Nouns: Maintain terms like 타디스(TARDIS), 소닉 스크류드라이버(Sonic Screwdriver), 달렉(Dalek), 마스터(Master), 젤리베이비(Jelly Baby).
 - Never translate "you" as "선생님". Use "당신", or omit naturally as Korean often does.
+- When "Doctor" refers to the Doctor (the main character), always translate as "닥터", never "닥터님", "선생님", or "박사님".
 - Multiple Speakers: If multiple speakers share a single subtitle number, separate their lines using a slash (/).
 - STRICT FORMATTING: Maintain a strict 1:1 mapping between input and output numbers. NEVER merge or split numbers.
 - OUTPUT FORMAT: You must ONLY output in the "Number|Translated Text" format. No intro, no outro, no extra text.`;
