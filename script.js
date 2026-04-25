@@ -137,6 +137,10 @@ async function transcribeTrack(file, offsetSec) {
     });
 
     filtered.forEach(seg => {
+    // 같은 글자 8번 이상 연속 → 3번으로 줄이기
+    seg.text = seg.text
+        .replace(/(.)\1{7,}/gi, '$1$1$1');
+
     // 단어 연속 반복 8번 이상 → 제거
     seg.text = seg.text
         .replace(/(\b\w+\b)(?:\s+\1){7,}/gi, '')
