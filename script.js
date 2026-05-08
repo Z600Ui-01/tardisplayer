@@ -85,16 +85,32 @@ async function transcribeTrack(file, offsetSec) {
     formData.append('temperature', '0.3');
     if (whisperPrompt) formData.append('prompt', whisperPrompt);
 
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    // const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    //     method: 'POST',
+    //     headers: { 'Authorization': 'Bearer ' + openaiKey },
+    //     body: formData
+    // });
+
+    // sttEngine이 'local'이면 localWhisperUrl로, 아니면 OpenAI API로 요청 보내기
+    const isLocal = sttEngine === 'local';
+    const fetchUrl = isLocal ? localWhisperUrl : 'https://api.openai.com/v1/audio/transcriptions';
+    
+    const headers = {};
+    if (!isLocal) {
+        headers['Authorization'] = 'Bearer ' + openaiKey;
+    }
+
+    const res = await fetch(fetchUrl, {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + openaiKey },
+        headers: headers,
         body: formData
     });
 
     // 🚨 응답이 정상이 아니면 강제로 에러 터뜨리기!
     if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(`OpenAI STT 에러 (${res.status}): ${errData.error?.message || '키가 틀렸거나 요금이 부족합니다.'}`);
+        const engineName = isLocal ? '로컬 서버' : 'OpenAI STT';
+        throw new Error(`${engineName} 에러 (${res.status}): ${errData.error?.message || '키가 틀렸거나 요금이 부족합니다.'}`);
     }
 
     const data = await res.json();
@@ -205,6 +221,35 @@ filtered = filtered.filter(seg => {
     return true;
 });
 
+// ── 파편화된 세그먼트 강제 병합 (로컬 위스퍼 전용) ──
+    if (sttEngine === 'local') {
+        let mergedFiltered = [];
+        let tempSeg = null;
+
+        for (const seg of filtered) {
+            if (!tempSeg) {
+                tempSeg = { start: seg.start, end: seg.end, text: seg.text, words: [...(seg.words || [])] };
+            } else {
+                // 앞 세그먼트가 문장 종결 부호(. ? ! " ')로 끝났는지 확인
+                const endsWithPunc = /[.?!"']$|—$|--$|\.\.\.$/.test(tempSeg.text.trim());
+                
+                if (!endsWithPunc) {
+                    // 문장이 덜 끝났으면 현재 세그먼트와 합체
+                    tempSeg.text += ' ' + seg.text;
+                    tempSeg.end = seg.end; // 끝나는 시간 연장
+                    if (seg.words) tempSeg.words.push(...seg.words);
+                } else {
+                    // 완전히 끝난 문장이면 배열에 넣고 새로 시작
+                    mergedFiltered.push(tempSeg);
+                    tempSeg = { start: seg.start, end: seg.end, text: seg.text, words: [...(seg.words || [])] };
+                }
+            }
+        }
+        if (tempSeg) mergedFiltered.push(tempSeg);
+        
+        filtered = mergedFiltered; // 병합된 결과물로 덮어쓰기
+    }
+
     // ── 문장 단위 후처리 ──
 
     const sentenceEnd = /[.?!]$|—$|--$|\.\.\.$/;
@@ -253,11 +298,13 @@ async function transcribeAll(files) {
     const MAX_SIZE = 25 * 1024 * 1024; // 25MB를 바이트로 계산
     let oversizedFiles = [];
 
-    // 1. 보내기 전에 미리 전수조사!
-    for (let i = 0; i < files.length; i++) {
-        if (files[i].size > MAX_SIZE) {
-            // 💡 "n번 파일 [파일명.mp3] (28.0MB)" 형식으로 보기 좋게 수정!
-            oversizedFiles.push(`${i + 1}번 파일 [${files[i].name}] (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
+    // 1. OpenAI API를 사용할 때만 25MB 용량 제한을 검사합니다.
+    if (sttEngine === 'openai') {
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].size > MAX_SIZE) {
+                // 💡 "n번 파일 [파일명.mp3] (28.0MB)" 형식으로 보기 좋게 수정!
+                oversizedFiles.push(`${i + 1}번 파일 [${files[i].name}] (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
+            }
         }
     }
 
@@ -450,6 +497,8 @@ async function translateSubtitles(subs) {
     return subs;
 }
 
+let sttEngine = 'openai'; // 'openai' or 'local'
+let localWhisperUrl = 'http://127.0.0.1:8080/inference';
 let openaiKey = '';
 let anthropicKey = '';
 
@@ -457,14 +506,35 @@ let anthropicKey = '';
 const apiModal = document.getElementById('apiModal');
 const openaiInput = document.getElementById('openaiInput');
 const anthropicInput = document.getElementById('anthropicInput');
+const localUrlInput = document.getElementById('localUrlInput');
 const btnCancelApi = document.getElementById('btnCancelApi');
 const btnConfirmApi = document.getElementById('btnConfirmApi');
 const keyIcon = document.querySelector('.key-icon');
+
+// 라디오 버튼 이벤트 (UI 토글)
+document.querySelectorAll('input[name="sttEngine"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        if (e.target.value === 'openai') {
+            document.getElementById('openaiGroup').style.display = 'flex';
+            document.getElementById('localGroup').style.display = 'none';
+        } else {
+            document.getElementById('openaiGroup').style.display = 'none';
+            document.getElementById('localGroup').style.display = 'flex';
+        }
+    });
+});
 
 // 모달 열기 (기존 키가 있으면 인풋창에 채워줌)
 function openApiModal() {
     openaiInput.value = openaiKey;
     anthropicInput.value = anthropicKey;
+    localUrlInput.value = localWhisperUrl;
+    document.querySelector(`input[name="sttEngine"][value="${sttEngine}"]`).checked = true;
+    
+    // 모달 열 때 현재 설정된 엔진에 맞게 UI 표시
+    document.getElementById('openaiGroup').style.display = sttEngine === 'openai' ? 'flex' : 'none';
+    document.getElementById('localGroup').style.display = sttEngine === 'local' ? 'flex' : 'none';
+    
     apiModal.classList.add('active');
 }
 
@@ -486,10 +556,13 @@ apiModal.addEventListener('click', (e) => {
 
 // 확인 버튼 누르면 변수에 키 저장 & 열쇠 아이콘 파란색 점등
 btnConfirmApi.addEventListener('click', () => {
+    sttEngine = document.querySelector('input[name="sttEngine"]:checked').value;
     openaiKey = openaiInput.value.trim();
     anthropicKey = anthropicInput.value.trim();
+    localWhisperUrl = localUrlInput.value.trim();
     
-    if (openaiKey || anthropicKey) {
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+    if (isSttReady || anthropicKey) {
         keyIcon.style.background = 'var(--light-blue)';
     } else {
         keyIcon.style.background = 'transparent';
@@ -944,8 +1017,9 @@ async function runSubtitleGeneration() {
         alert('먼저 오디오 파일(AUDIO)을 업로드해주세요!');
         return;
     }
-    if (!openaiKey || !anthropicKey) {
-        alert('우측 상단의 열쇠 버튼을 눌러 API 키를 먼저 입력해주세요!');
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+    if (!isSttReady || !anthropicKey) {
+        alert('우측 상단의 열쇠 버튼을 눌러 API 키 또는 로컬 서버 URL을 먼저 설정해주세요!');
         return;
     }
 
@@ -1011,18 +1085,20 @@ function updateWaitingMessage() {
     let enText = "Waiting for subtitle materialization...";
     let btnHtml = "";
 
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+
     // 조건에 따라 텍스트와 버튼 렌더링 변경
-    if (audioLoaded && openaiKey && anthropicKey) {
+    if (audioLoaded && isSttReady && anthropicKey) {
         krText = "자막 물질화 준비 완료! \n자막 생성 시작하기 버튼을 누르거나 \nSRT 파일을 불러오세요.";
         enText = "Translation circuits connected and ready.";
         // 🌟 오디오와 키가 모두 세팅되었을 때만 예쁜 생성 버튼 등장!
         btnHtml = `<button id="inlineGenerateBtn" class="inline-generate-btn">
              <img src="icons/generate.svg" class="btn-svg-icon" alt=""> 자막 생성 시작하기
            </button>`;
-    } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
+    } else if (audioLoaded && (!isSttReady || !anthropicKey)) {
         krText = "오디오 스캔 완료. SRT 파일을 불러오거나, \n우측 상단의 열쇠 아이콘을 눌러 API 키를 입력하세요.";
         enText = "Audio scanned.";
-    } else if (!audioLoaded && (openaiKey && anthropicKey)) {
+    } else if (!audioLoaded && (isSttReady && anthropicKey)) {
         krText = "API 키 인식 완료. \nAUDIO 폴더를 눌러 오디오를 불러오세요.";
         enText = "Keys verified.";
     } else {
