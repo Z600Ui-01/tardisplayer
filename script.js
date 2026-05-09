@@ -75,6 +75,10 @@ Follow these rules strictly:
 
 // ── Whisper STT ──
 async function transcribeTrack(file, offsetSec) {
+    // sttEngine이 'local'이면 localWhisperUrl로, 아니면 OpenAI API로 요청 보내기
+    const isLocal = sttEngine === 'local';
+    const fetchUrl = isLocal ? localWhisperUrl : 'https://api.openai.com/v1/audio/transcriptions';
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('model', 'whisper-1');
@@ -82,19 +86,31 @@ async function transcribeTrack(file, offsetSec) {
     formData.append('timestamp_granularities[]', 'segment');
     formData.append('timestamp_granularities[]', 'word');
     formData.append('language', 'en');
-    formData.append('temperature', '0.5');
     if (whisperPrompt) formData.append('prompt', whisperPrompt);
 
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    if (!isLocal) {
+        // [OpenAI API 전용]
+        formData.append('temperature', '0.5');
+    } else {
+        // [로컬 서버 전용] 
+    }
+    
+    const headers = {};
+    if (!isLocal) {
+        headers['Authorization'] = 'Bearer ' + openaiKey;
+    }
+
+    const res = await fetch(fetchUrl, {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + openaiKey },
+        headers: headers,
         body: formData
     });
 
     // 🚨 응답이 정상이 아니면 강제로 에러 터뜨리기!
     if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(`OpenAI STT 에러 (${res.status}): ${errData.error?.message || '키가 틀렸거나 요금이 부족합니다.'}`);
+        const engineName = isLocal ? '로컬 서버' : 'OpenAI STT';
+        throw new Error(`${engineName} 에러 (${res.status}): ${errData.error?.message || '키가 틀렸거나 요금이 부족합니다.'}`);
     }
 
     const data = await res.json();
@@ -118,17 +134,48 @@ async function transcribeTrack(file, offsetSec) {
 
     // 중복/밀림 필터
     let filtered = [];
-    for (let i = 0; i < raw.length; i++) {
-        const seg = raw[i];
-        if (!seg.text) continue;
-        if (seg.end <= seg.start) continue;
-        if (filtered.length > 0) {
-            const prev = filtered[filtered.length - 1];
-            if (seg.text === prev.text && Math.abs(seg.start - prev.start) < 2) continue;
-            if (seg.start < prev.end - 0.5) continue;
-            if (seg.text === prev.text && seg.start < prev.end + 5) continue;
+
+    // 필터링 파이프라인 분리
+    if (sttEngine === 'local') {
+        // ── [로컬 전용] 강력한 연속 환청(루프) 제거 필터 ──
+        let repeatCount = 0;
+        for (let i = 0; i < raw.length; i++) {
+            const seg = raw[i];
+            if (!seg.text || seg.end <= seg.start) continue;
+
+            if (filtered.length > 0) {
+                const prev = filtered[filtered.length - 1];
+                const cleanCurrent = seg.text.replace(/[^a-zA-Z]/g, '').toLowerCase();
+                const cleanPrev = prev.text.replace(/[^a-zA-Z]/g, '').toLowerCase();
+
+                if (cleanCurrent === cleanPrev) {
+                    repeatCount++;
+                    // 똑같은 문장이 3번 이상 연속으로 들어오면 환청 루프로 간주하고 버림
+                    if (repeatCount >= 2) {
+                        console.log('🚨 [로컬] 무한 루프 환청 차단:', seg.text);
+                        continue; 
+                    }
+                } else {
+                    repeatCount = 0; 
+                }
+                if (seg.start < prev.end - 0.5) continue;
+            }
+            filtered.push(seg);
         }
-        filtered.push(seg);
+    } else {
+        // ── [API 전용] 기존 중복/밀림 필터 ──
+        for (let i = 0; i < raw.length; i++) {
+            const seg = raw[i];
+            if (!seg.text) continue;
+            if (seg.end <= seg.start) continue;
+            if (filtered.length > 0) {
+                const prev = filtered[filtered.length - 1];
+                if (seg.text === prev.text && Math.abs(seg.start - prev.start) < 2) continue;
+                if (seg.start < prev.end - 0.5) continue;
+                if (seg.text === prev.text && seg.start < prev.end + 5) continue;
+            }
+            filtered.push(seg);
+        }
     }
 
     filtered.forEach(seg => {
@@ -212,11 +259,39 @@ filtered = filtered.filter(seg => seg.text.length > 0);
     return true;
     });
 
+// ── 파편화된 세그먼트 강제 병합 (로컬 위스퍼 전용) ──
+    if (sttEngine === 'local') {
+        let mergedFiltered = [];
+        let tempSeg = null;
+
+        for (const seg of filtered) {
+            if (!tempSeg) {
+                tempSeg = { start: seg.start, end: seg.end, text: seg.text, words: [...(seg.words || [])] };
+            } else {
+                const textTrimmed = tempSeg.text.trim();
+                
+                // 1. 끝이 문장 종결 부호인지 확인 (따옴표 포함)
+                const endsWithPunc = /[.?!]["']?$|—$|--$|\.\.\.$/.test(textTrimmed);
+                // 2. 그 마침표가 영어 호칭, 약어, 또는 이니셜(A. 등)인지 확인
+                const isAbbrev = /\b([A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Lt|Col|Cmdr)["']?\.$/i.test(textTrimmed);
+                
+                if (endsWithPunc && !isAbbrev) {
+                    // 진짜 끝난 문장일 때만 배열에 확정
+                    mergedFiltered.push(tempSeg);
+                    tempSeg = { start: seg.start, end: seg.end, text: seg.text, words: [...(seg.words || [])] };
+                } else {
+                    // 덜 끝났으면 현재 세그먼트에 계속 이어 붙임
+                    tempSeg.text += ' ' + seg.text;
+                    tempSeg.end = seg.end;
+                    if (seg.words) tempSeg.words.push(...seg.words);
+                }
+            }
+        }
+        if (tempSeg) mergedFiltered.push(tempSeg);
+        filtered = mergedFiltered; // 병합된 결과물로 덮어쓰기
+    }
+
     // ── 문장 단위 후처리 ──
-
-    const sentenceEnd = /[.?!]$|—$|--$|\.\.\.$/;
-
-    // 뭉친 segment → 문장부호 기준으로 쪼개기
     const split = [];
     for (const seg of filtered) {
         // word 데이터가 없으면 쪼갤 수 없으니 그대로
@@ -228,20 +303,37 @@ filtered = filtered.filter(seg => seg.text.length > 0);
         let buf = [];
         let bufStart = seg.start;
 
-        for (const w of seg.words) {
+        for (let k = 0; k < seg.words.length; k++) {
+            const w = seg.words[k];
             buf.push(w);
-            if (sentenceEnd.test(w.word.trim())) {
-                split.push({
-                    start: bufStart,
-                    end: w.end + offsetSec,
-                    text: buf.map(b => b.word).join('').trim()
-                });
-                bufStart = w.end + offsetSec;
-                buf = [];
+            
+            const wordTrimmed = w.word.trim();
+            
+            // 1. 현재 단어 조각에 문장 종결 부호가 들어있는지 1차 확인
+            const hasSentenceEnd = /[.?!]["']?$|—$|--$|\.\.\.$/.test(wordTrimmed);
+            
+            if (hasSentenceEnd) {
+                // 2. 🌟 핵심: 단어 조각 하나만 보지 않고, "지금까지 버퍼에 모인 전체 텍스트"를 확인
+                const currentText = buf.map(b => b.word).join('').trim();
+                
+                // 3. 모인 텍스트가 호칭이나 이니셜(J. R. R. 등)로 끝났는지 2차 확인
+                const endsWithAbbrev = /\b([A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Lt|Col|Cmdr)["']?\.$/i.test(currentText);
+                
+                // 약어가 아니라면 진짜로 문장이 끝난 것이므로 쪼개기!
+                if (!endsWithAbbrev) {
+                    split.push({
+                        start: bufStart,
+                        end: w.end + offsetSec,
+                        text: currentText
+                    });
+                    
+                    bufStart = w.end + offsetSec;
+                    buf = [];
+                }
             }
         }
 
-        // 버퍼에 남은 단어 (마지막 문장부호 없이 끝난 경우)
+        // 버퍼에 남은 단어 처리 (마지막에 마침표 없이 끝난 경우)
         if (buf.length > 0) {
             split.push({
                 start: bufStart,
@@ -260,11 +352,13 @@ async function transcribeAll(files) {
     const MAX_SIZE = 25 * 1024 * 1024; // 25MB를 바이트로 계산
     let oversizedFiles = [];
 
-    // 1. 보내기 전에 미리 전수조사!
-    for (let i = 0; i < files.length; i++) {
-        if (files[i].size > MAX_SIZE) {
-            // 💡 "n번 파일 [파일명.mp3] (28.0MB)" 형식으로 보기 좋게 수정!
-            oversizedFiles.push(`${i + 1}번 파일 [${files[i].name}] (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
+    // 1. OpenAI API를 사용할 때만 25MB 용량 제한을 검사합니다.
+    if (sttEngine === 'openai') {
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].size > MAX_SIZE) {
+                // 💡 "n번 파일 [파일명.mp3] (28.0MB)" 형식으로 보기 좋게 수정!
+                oversizedFiles.push(`${i + 1}번 파일 [${files[i].name}] (${(files[i].size / 1024 / 1024).toFixed(1)}MB)`);
+            }
         }
     }
 
@@ -457,6 +551,8 @@ async function translateSubtitles(subs) {
     return subs;
 }
 
+let sttEngine = 'openai'; // 'openai' or 'local'
+let localWhisperUrl = 'http://127.0.0.1:8080/inference';
 let openaiKey = '';
 let anthropicKey = '';
 
@@ -464,14 +560,35 @@ let anthropicKey = '';
 const apiModal = document.getElementById('apiModal');
 const openaiInput = document.getElementById('openaiInput');
 const anthropicInput = document.getElementById('anthropicInput');
+const localUrlInput = document.getElementById('localUrlInput');
 const btnCancelApi = document.getElementById('btnCancelApi');
 const btnConfirmApi = document.getElementById('btnConfirmApi');
 const keyIcon = document.querySelector('.key-icon');
+
+// 라디오 버튼 이벤트 (UI 토글)
+document.querySelectorAll('input[name="sttEngine"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        if (e.target.value === 'openai') {
+            document.getElementById('openaiGroup').style.display = 'flex';
+            document.getElementById('localGroup').style.display = 'none';
+        } else {
+            document.getElementById('openaiGroup').style.display = 'none';
+            document.getElementById('localGroup').style.display = 'flex';
+        }
+    });
+});
 
 // 모달 열기 (기존 키가 있으면 인풋창에 채워줌)
 function openApiModal() {
     openaiInput.value = openaiKey;
     anthropicInput.value = anthropicKey;
+    localUrlInput.value = localWhisperUrl;
+    document.querySelector(`input[name="sttEngine"][value="${sttEngine}"]`).checked = true;
+    
+    // 모달 열 때 현재 설정된 엔진에 맞게 UI 표시
+    document.getElementById('openaiGroup').style.display = sttEngine === 'openai' ? 'flex' : 'none';
+    document.getElementById('localGroup').style.display = sttEngine === 'local' ? 'flex' : 'none';
+    
     apiModal.classList.add('active');
 }
 
@@ -493,10 +610,13 @@ apiModal.addEventListener('click', (e) => {
 
 // 확인 버튼 누르면 변수에 키 저장 & 열쇠 아이콘 파란색 점등
 btnConfirmApi.addEventListener('click', () => {
+    sttEngine = document.querySelector('input[name="sttEngine"]:checked').value;
     openaiKey = openaiInput.value.trim();
     anthropicKey = anthropicInput.value.trim();
+    localWhisperUrl = localUrlInput.value.trim();
     
-    if (openaiKey || anthropicKey) {
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+    if (isSttReady || anthropicKey) {
         keyIcon.style.background = 'var(--light-blue)';
     } else {
         keyIcon.style.background = 'transparent';
@@ -623,6 +743,8 @@ audioInput.addEventListener('change', async e => {
         : files[0].name.replace(/\.[^.]+$/, '').toUpperCase();
     setTitle(name);
     const cover = document.getElementById('coverImg');
+    const outer = document.querySelector('.outer'); // 전체 배경 요소
+
     jsmediatags.read(files[0], {
         onSuccess: tag => {
             const pic = tag.tags.picture;
@@ -634,14 +756,74 @@ audioInput.addEventListener('change', async e => {
                 cover.style.backgroundSize = 'cover';
                 cover.style.backgroundPosition = 'center';
                 cover.textContent = '';
+
+                // 이미지 로드 후 평균 색상 추출하여 배경색으로 사용
+                const img = new Image();
+                img.src = imgUrl;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                    let r = 0, g = 0, b = 0;
+                    
+                    // 픽셀 띄엄띄엄(성능 최적화) 검사하여 색상 합산
+                    for (let i = 0; i < data.length; i += 40) { 
+                        r += data[i];
+                        g += data[i+1];
+                        b += data[i+2];
+                    }
+                    const count = data.length / 40;
+                    r = Math.floor(r / count);
+                    g = Math.floor(g / count);
+                    b = Math.floor(b / count);
+
+                    // 🚀 추가: 채도 부스팅 (Saturation Boosting)
+                    const saturationFactor = 1.2; // 여기서 채도 강도를 조절하세요! (1.0 = 원본)
+                    const gray = (r * 299 + g * 587 + b * 114) / 1000; // 현재 색상의 흑백(밝기) 기준점 구하기
+                    
+                    // 회색(무채색)을 기준으로 색상값을 바깥으로 밀어내어 채도를 증폭시킵니다.
+                    r = Math.min(255, Math.max(0, Math.floor(gray + saturationFactor * (r - gray))));
+                    g = Math.min(255, Math.max(0, Math.floor(gray + saturationFactor * (g - gray))));
+                    b = Math.min(255, Math.max(0, Math.floor(gray + saturationFactor * (b - gray))));
+                    
+                    // 추출한 평균 색상으로 부드럽게 배경색 변경
+                    outer.style.transition = 'background-color 0.8s ease';
+                    outer.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+                    // 인간의 눈에 보이는 밝기(휘도) 계산 (0~255)
+                    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                    
+                    // 밝기가 128보다 낮으면(어두우면) dark-bg 클래스 추가
+                    if (brightness < 128) {
+                        outer.classList.add('dark-bg');
+                    } else {
+                        outer.classList.remove('dark-bg');
+                    }
+                };
+            } else {
+                // 표지가 없을 경우 기본 파란색(--blue)으로 원복
+                cover.style.backgroundImage = 'none';
+                cover.textContent = '?';
+                outer.style.backgroundColor = 'var(--blue)';
+                outer.classList.remove('dark-bg');
             }
             if (tag.tags.title) {
                 const t = tag.tags.title.toUpperCase();
                 const artist = tag.tags.artist ? ' - ' + tag.tags.artist.toUpperCase() : '';
                 setTitle(t + artist);
             }
+            
         },
-        onError: () => { }
+        onError: () => {
+            cover.style.backgroundImage = 'none';
+            cover.textContent = '?';
+            outer.style.backgroundColor = 'var(--blue)';
+            outer.classList.remove('dark-bg');
+        }
     });
     if (files.length > 1) {
         setTitle('MERGING ' + files.length + ' TRACKS...');
@@ -951,8 +1133,9 @@ async function runSubtitleGeneration() {
         alert('먼저 오디오 파일(AUDIO)을 업로드해주세요!');
         return;
     }
-    if (!openaiKey || !anthropicKey) {
-        alert('우측 상단의 열쇠 버튼을 눌러 API 키를 먼저 입력해주세요!');
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+    if (!isSttReady || !anthropicKey) {
+        alert('우측 상단의 열쇠 버튼을 눌러 API 키 또는 로컬 서버 URL을 먼저 설정해주세요!');
         return;
     }
 
@@ -1018,18 +1201,20 @@ function updateWaitingMessage() {
     let enText = "Waiting for subtitle materialization...";
     let btnHtml = "";
 
+    const isSttReady = sttEngine === 'openai' ? openaiKey : localWhisperUrl;
+
     // 조건에 따라 텍스트와 버튼 렌더링 변경
-    if (audioLoaded && openaiKey && anthropicKey) {
+    if (audioLoaded && isSttReady && anthropicKey) {
         krText = "자막 물질화 준비 완료! \n자막 생성 시작하기 버튼을 누르거나 \nSRT 파일을 불러오세요.";
         enText = "Translation circuits connected and ready.";
         // 🌟 오디오와 키가 모두 세팅되었을 때만 예쁜 생성 버튼 등장!
         btnHtml = `<button id="inlineGenerateBtn" class="inline-generate-btn">
              <img src="icons/generate.svg" class="btn-svg-icon" alt=""> 자막 생성 시작하기
            </button>`;
-    } else if (audioLoaded && (!openaiKey || !anthropicKey)) {
+    } else if (audioLoaded && (!isSttReady || !anthropicKey)) {
         krText = "오디오 스캔 완료. SRT 파일을 불러오거나, \n우측 상단의 열쇠 아이콘을 눌러 API 키를 입력하세요.";
         enText = "Audio scanned.";
-    } else if (!audioLoaded && (openaiKey && anthropicKey)) {
+    } else if (!audioLoaded && (isSttReady && anthropicKey)) {
         krText = "API 키 인식 완료. \nAUDIO 폴더를 눌러 오디오를 불러오세요.";
         enText = "Keys verified.";
     } else {

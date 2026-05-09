@@ -195,15 +195,40 @@
 
   <div class="modal-overlay" id="apiModal">
     <div class="modal-box">
-      <h2 class="modal-title">API KEYS</h2>
+      <h2 class="modal-title">API KEYS & SERVER SETTINGS</h2>
 
       <div class="modal-group">
+        <label>STT 엔진 선택</label>
+        <div style="display: flex; gap: 16px; margin-bottom: 4px;">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
+            <input type="radio" name="sttEngine" value="openai" checked> OpenAI API
+          </label>
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 500;">
+            <input type="radio" name="sttEngine" value="local"> 로컬 서버 (whisper.cpp 등)
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-group" id="openaiGroup">
         <label>OpenAI API Key (Whisper STT용)</label>
         <div class="input-container">
           <input type="password" id="openaiInput" placeholder="sk-...">
           <button type="button" class="eye-btn" tabindex="-1"></button>
         </div>
         <p class="modal-desc">키 발급: <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></p>
+      </div>
+
+      <div class="modal-group" id="localGroup" style="display: none;">
+        <p class="modal-desc" style="margin-bottom: 8px;">
+          * 위스퍼 모델 <b>'large-v3-turbo'</b> 사용을 권장합니다.
+        </p>
+        <label>로컬 Whisper 서버 주소</label>
+        <div class="input-container">
+          <input type="text" id="localUrlInput" placeholder="http://127.0.0.1:8080/inference">
+        </div>
+        <p class="modal-desc">OpenAI API와 호환되는 로컬 서버의 엔드포인트를 입력하세요.</p>
+        <!-- <a href="https://github.com/Z600Ui-01/tardisplayer#" target="_blank" rel="noopener noreferrer" id="guideLink" style="font-weight: bold; color: var(--blue);">로컬 서버(Whisper) 설치 및 실행 가이드 보기</a> -->
+        <!-- TODO: 깃헙 README 로컬 서버 가이드 추가 -->
       </div>
 
       <div class="modal-group">
