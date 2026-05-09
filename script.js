@@ -243,12 +243,15 @@ filtered = filtered.filter(seg => {
         return false;
     }
     
-    // 2. 짧은 구절 연속 반복 감지 (1~3단어 패턴이 3회 이상 연속)
-    for (let patternLen = 1; patternLen <= 3; patternLen++) {
-        if (words.length < patternLen * 3) continue;
-        const pattern = words.slice(0, patternLen).join(' ');
+    // 2. 짧은 구절 반복 감지 (1~4단어 패턴이 3회 이상 반복)
+let repetitionFound = false;
+for (let patternLen = 1; patternLen <= 4 && !repetitionFound; patternLen++) {
+    if (words.length < patternLen * 3) continue;
+    // 시작 위치를 0부터 patternLen까지 시도
+    for (let start = 0; start < patternLen; start++) {
+        const pattern = words.slice(start, start + patternLen).join(' ');
         let repeats = 1;
-        for (let i = patternLen; i + patternLen <= words.length; i += patternLen) {
+        for (let i = start + patternLen; i + patternLen <= words.length; i += patternLen) {
             if (words.slice(i, i + patternLen).join(' ') === pattern) {
                 repeats++;
             } else {
@@ -256,10 +259,13 @@ filtered = filtered.filter(seg => {
             }
         }
         if (repeats >= 3) {
-            console.log('반복 환청 제거 (' + repeats + '회):', seg.text.slice(0, 80));
-            return false;
+            console.log('반복 환청 제거 (' + repeats + '회, "' + pattern + '"):', seg.text.slice(0, 80));
+            repetitionFound = true;
+            break;
         }
     }
+}
+if (repetitionFound) return false;
     
     return true;
 });
