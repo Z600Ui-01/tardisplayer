@@ -47,7 +47,7 @@ const coreVocab = `TARDIS, Time Lord, Gallifrey, Sonic Screwdriver, Jelly Baby, 
 // 에피소드마다 바꿔주는 전용 고유명사 (인물 이름, 행성 이름 등)
 const episodeVocab = '';
 // 컴패니언 이름
-const campanionVocab = `Charley, Sarah, Leela, Romana, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
+const campanionVocab = `Charley, C'rizz, Sarah, Leela, Romana, K9, Adric, brigadier, Lethbridge-Stewart, Irving Braxiatel, Ace, Bernice Summerfield, `;
 // Whisper 프롬프트는 에피소드별 고유명사가 있으면 그것도 포함, 없으면 핵심 고유명사 + 컴패니언 이름만
 let whisperPrompt = episodeVocab ? `${coreVocab}, ${episodeVocab}, ${campanionVocab}` : `${coreVocab}, ${campanionVocab}`;
 //모달에서 보여주는 용도
@@ -90,7 +90,7 @@ async function transcribeTrack(file, offsetSec) {
 
     if (!isLocal) {
         // [OpenAI API 전용]
-        formData.append('temperature', '0.3');
+        formData.append('temperature', '0.5');
     } else {
         // [로컬 서버 전용] 
     }
@@ -243,14 +243,21 @@ filtered = filtered.filter(seg => seg.text.length > 0);
     });
     filtered = filtered.filter(seg => seg.text.length > 0);
 
-    // ── to be continued 환청 제거 ──
-filtered = filtered.filter(seg => {
-    if (seg.text.trim().toLowerCase().replace(/\.+$/, '') === 'to be continued') {
+    // ── 환청 블랙리스트 ──
+    filtered = filtered.filter(seg => {
+    const hallucinationBlacklist = [
+    'to be continued',
+    'thank you for watching',
+    'the end',
+    'end',
+    ];
+    const cleaned = seg.text.trim().toLowerCase().replace(/[.,!?]+$/, '');
+    if (hallucinationBlacklist.includes(cleaned)) {
         console.log('환청 제거:', seg.text);
         return false;
     }
     return true;
-});
+    });
 
 // ── 파편화된 세그먼트 강제 병합 (로컬 위스퍼 전용) ──
     if (sttEngine === 'local') {
