@@ -90,7 +90,7 @@ async function transcribeTrack(file, offsetSec) {
 
     if (!isLocal) {
         // [OpenAI API 전용]
-        formData.append('temperature', '0.5');
+        formData.append('temperature', '0');
     } else {
         // [로컬 서버 전용] 
     }
@@ -215,33 +215,54 @@ async function transcribeTrack(file, offsetSec) {
 filtered = filtered.filter(seg => seg.text.length > 0);
 
     // ── 프롬프트 환청 필터 ──
-    const promptWords = new Set(
-        whisperPrompt.toLowerCase()
-            .split(/[,\s]+/)
-            .filter(w => w.length > 0)
-    );
+const promptWords = new Set(
+    whisperPrompt.toLowerCase()
+        .split(/[,\s.;]+/)
+        .filter(w => w.length > 0)
+);
 
-    filtered.forEach(seg => {
-        const words = seg.text.split(/\s+/);
-        let cutIndex = 0;
-        for (let i = 0; i < words.length; i++) {
-            const clean = words[i].toLowerCase().replace(/[.,!?'"]/g, '');
-            if (promptWords.has(clean)) {
-                cutIndex = i + 1;
+filtered = filtered.filter(seg => {
+    const words = seg.text.split(/\s+/)
+        .map(w => w.toLowerCase().replace(/[.,!?'"]/g, ''))
+        .filter(w => w.length > 0);
+    
+    if (words.length === 0) return false;
+    
+    // 1. 프롬프트 단어 비율 체크 (부분 매칭은 4글자 이상만)
+    const promptHits = words.filter(w => {
+        for (const pw of promptWords) {
+            if (w === pw) return true;
+            if (pw.length >= 4 && (w.includes(pw) || pw.includes(w))) return true;
+        }
+        return false;
+    }).length;
+    const ratio = promptHits / words.length;
+    
+    if (ratio >= 0.6) {
+        console.log('프롬프트 환청 제거 (비율 ' + Math.round(ratio*100) + '%):', seg.text.slice(0, 80));
+        return false;
+    }
+    
+    // 2. 짧은 구절 연속 반복 감지 (1~3단어 패턴이 3회 이상 연속)
+    for (let patternLen = 1; patternLen <= 3; patternLen++) {
+        if (words.length < patternLen * 3) continue;
+        const pattern = words.slice(0, patternLen).join(' ');
+        let repeats = 1;
+        for (let i = patternLen; i + patternLen <= words.length; i += patternLen) {
+            if (words.slice(i, i + patternLen).join(' ') === pattern) {
+                repeats++;
             } else {
                 break;
             }
         }
-        if (cutIndex > 0 && cutIndex < words.length) {
-            console.log('프롬프트 환청 트리밍:', words.slice(0, cutIndex).join(' '));
-            seg.text = words.slice(cutIndex).join(' ');
+        if (repeats >= 3) {
+            console.log('반복 환청 제거 (' + repeats + '회):', seg.text.slice(0, 80));
+            return false;
         }
-        if (cutIndex >= words.length) {
-            console.log('프롬프트 환청 제거:', seg.text);
-            seg.text = '';
-        }
-    });
-    filtered = filtered.filter(seg => seg.text.length > 0);
+    }
+    
+    return true;
+});
 
     // ── 환청 블랙리스트 ──
     filtered = filtered.filter(seg => {
