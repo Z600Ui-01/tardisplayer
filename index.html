@@ -285,6 +285,24 @@
       </div>
     </div>
   </div>
+
+  <div class="modal-overlay" id="saveWarningModal">
+    <div class="modal-box" style="width: 400px;">
+      <h2 class="modal-title" style="color: #d9534f;">UNSAVED SUBTITLES</h2>
+      
+      <div class="modal-group">
+        <p class="modal-desc" style="text-align: center; font-size: 15px; margin-top: 8px; line-height: 1.6; color: var(--charcoal);">
+          생성한 자막이 아직 저장되지 않았습니다.<br><strong>이대로 삭제하시겠습니까?</strong>
+        </p>
+      </div>
+
+      <div class="modal-actions" style="justify-content: center; margin-top: 16px; gap: 8px;">
+        <button class="modal-btn cancel" id="btnCancelWarning">작업 취소</button>
+        <button class="modal-btn cancel" id="btnDiscardSubtitles" style="color: #d9534f; border-color: #d9534f;">저장 없이 삭제</button>
+        <button class="modal-btn confirm" id="btnSaveAndProceed">저장하기</button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
