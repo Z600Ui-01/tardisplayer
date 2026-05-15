@@ -1338,3 +1338,33 @@ document.querySelectorAll('.eye-btn').forEach(btn => {
         }
     });
 });
+
+// ── 키보드 단축키 지원 ──
+window.addEventListener('keydown', (e) => {
+    // 1. 예외 처리: 입력창(input, textarea)에 포커스가 있을 때는 단축키 작동 방지
+    const targetTag = e.target.tagName.toLowerCase();
+    if (targetTag === 'input' || targetTag === 'textarea' || e.target.isContentEditable) {
+        return;
+    }
+
+    // 2. 예외 처리: 오디오가 아직 로드되지 않았다면 무시
+    if (!audioLoaded) return;
+
+    // 3. 키보드 입력에 따른 동작 매핑
+    switch (e.code) {
+        case 'Space':
+            e.preventDefault(); // 스페이스바 누를 때 화면이 아래로 스크롤되는 기본 동작 방지
+            btnPlay.click();    // 마우스로 플레이 버튼을 누른 것과 똑같이 동작시킴
+            break;
+            
+        case 'ArrowLeft':
+            e.preventDefault(); // 방향키 스크롤 방지
+            btnBack.click();    // -10초 버튼 클릭
+            break;
+            
+        case 'ArrowRight':
+            e.preventDefault(); // 방향키 스크롤 방지
+            btnFwd.click();     // +10초 버튼 클릭
+            break;
+    }
+});
