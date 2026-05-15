@@ -760,9 +760,45 @@ function updateProgress() {
     timeCurrent.textContent = fmt(audio.currentTime);
 }
 
+// ── 커스텀 컨펌 모달 로직 (Promise 사용) ──
+const confirmModal = document.getElementById('confirmModal');
+const btnKeepSubtitles = document.getElementById('btnKeepSubtitles');
+const btnResetSubtitles = document.getElementById('btnResetSubtitles');
+
+function askToResetSubtitles() {
+    return new Promise((resolve) => {
+        confirmModal.classList.add('active'); // 모달 띄우기
+
+        // '초기화하기' 클릭 시
+        btnResetSubtitles.addEventListener('click', function onClickReset() {
+            confirmModal.classList.remove('active');
+            resolve(true); // true(초기화 승인) 반환
+        }, { once: true });
+
+        // '유지하기' 클릭 시
+        btnKeepSubtitles.addEventListener('click', function onClickKeep() {
+            confirmModal.classList.remove('active');
+            resolve(false); // false(유지) 반환
+        }, { once: true });
+    });
+}
+
 audioInput.addEventListener('change', async e => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
+
+    // 기존 자막이 있을 경우 커스텀 모달로 초기화 여부 묻기
+    if (subtitles.length > 0) {
+        // 모달창에서 버튼을 누를 때까지 이 줄에서 코드가 멈춰서 기다림 (await)
+        const shouldReset = await askToResetSubtitles(); 
+        
+        if (shouldReset) {
+            subtitles = []; // 데이터 비우기
+            document.querySelector('.subtitle-area').innerHTML = ''; // 화면 비우기
+            updateWaitingMessage(); // 대기 화면 예쁘게 다시 그려주기
+        }
+    }
+
     files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     tracks = files;
     const name = files.length > 1

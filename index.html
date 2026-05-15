@@ -268,6 +268,23 @@
     </div>
   </div>
   </div>
+
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal-box" style="width: 380px;">
+      <h2 class="modal-title">WARNING</h2>
+      
+      <div class="modal-group">
+        <p class="modal-desc" style="text-align: center; font-size: 15px; margin-top: 8px; line-height: 1.6; color: var(--charcoal);">
+          새로운 오디오를 불러옵니다.<br><strong>기존 자막을 초기화할까요?</strong>
+        </p>
+      </div>
+
+      <div class="modal-actions" style="justify-content: center; margin-top: 16px; gap: 12px;">
+        <button class="modal-btn cancel" id="btnKeepSubtitles">유지하기</button>
+        <button class="modal-btn confirm" id="btnResetSubtitles">초기화하기</button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
