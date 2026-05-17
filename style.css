@@ -559,27 +559,28 @@
 }
 .modal-btn {
   padding: 8px 18px;
-  border-radius: 6px;
+  border-radius: 0;
   font-family: var(--font-kr);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   border: 1px solid var(--charcoal);
-  transition: background 0.15s;
+  box-shadow: none;
+  transition: box-shadow 0.15s;
 }
 .modal-btn.cancel {
-  background: transparent;
+  background: var(--cream);
   color: var(--charcoal);
 }
 .modal-btn.cancel:hover {
-  background: #E8E2D6;
+  box-shadow: inset 0 0 0 1px var(--cream), inset 0 0 0 2px var(--charcoal);
 }
 .modal-btn.confirm {
   background: var(--charcoal);
   color: var(--cream);
 }
 .modal-btn.confirm:hover {
-  background: var(--black);
+  box-shadow: inset 0 0 0 1px var(--charcoal), inset 0 0 0 2px var(--cream);
 }
 
 /* ── 중앙 자막 생성 버튼 디자인 ── */
