@@ -510,8 +510,8 @@
   font-family: var(--font-en);
   font-size: 16px;
   color: var(--charcoal);
-  text-align: center;
-  margin-bottom: 4px;
+  text-align: left;
+  margin-bottom: 20px;
 }
 .modal-group {
   display: flex;
