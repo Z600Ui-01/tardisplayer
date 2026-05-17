@@ -342,8 +342,10 @@ filtered = filtered.filter(seg => {
             
             // 1. 현재 단어 조각에 문장 종결 부호가 들어있는지 1차 확인
             const hasSentenceEnd = /[.?!]["']?$|—$|--$|\.\.\.$/.test(wordTrimmed);
+const bufDuration = w.end + offsetSec - bufStart;
+const forceSplit = bufDuration >= 7;  // 7초 누적되면 강제 분할
             
-            if (hasSentenceEnd) {
+            if (hasSentenceEnd || forceSplit) {
                 // 2. 🌟 핵심: 단어 조각 하나만 보지 않고, "지금까지 버퍼에 모인 전체 텍스트"를 확인
                 const currentText = buf.map(b => b.word).join('').trim();
                 
@@ -351,7 +353,7 @@ filtered = filtered.filter(seg => {
                 const endsWithAbbrev = /\b([A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Lt|Col|Cmdr)["']?\.$/i.test(currentText);
                 
                 // 약어가 아니라면 진짜로 문장이 끝난 것이므로 쪼개기!
-                if (!endsWithAbbrev) {
+                if (!endsWithAbbrev || forceSplit) {
                     split.push({
                         start: bufStart,
                         end: w.end + offsetSec,
