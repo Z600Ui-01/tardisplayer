@@ -239,44 +239,48 @@ filtered = filtered.filter(seg => {
     
     if (words.length === 0) return false;
     
-    // 1. 프롬프트 단어 비율 체크 (부분 매칭은 4글자 이상만)
+    // 1. 프롬프트 단어 비율 체크
+    // 정확 매칭 우선, 부분 매칭은 w가 4글자 이상이고 pw를 포함할 때만
     const promptHits = words.filter(w => {
-        for (const pw of promptWords) {
-            if (w === pw) return true;
-            if (pw.length >= 4 && (w.includes(pw) || pw.includes(w))) return true;
+        if (promptWords.has(w)) return true;
+        if (w.length >= 5) {
+            for (const pw of promptWords) {
+                if (pw.length >= 4 && w.includes(pw)) return true;
+            }
         }
         return false;
     }).length;
     const ratio = promptHits / words.length;
     
-    if (ratio >= 0.6) {
+    // 짧은 segment(3단어 이하)는 우연 매치 위험이 커서 80% 이상일 때만 제거
+    const threshold = words.length <= 3 ? 0.8 : 0.6;
+    if (ratio >= threshold && promptHits >= 2) {
         console.log('프롬프트 환청 제거 (비율 ' + Math.round(ratio*100) + '%):', seg.text.slice(0, 80));
         return false;
     }
     
-    // 2. 짧은 구절 반복 감지 (1~4단어 패턴이 3회 이상 반복)
-let repetitionFound = false;
-for (let patternLen = 1; patternLen <= 4 && !repetitionFound; patternLen++) {
-    if (words.length < patternLen * 3) continue;
-    // 시작 위치를 0부터 patternLen까지 시도
-    for (let start = 0; start < patternLen; start++) {
-        const pattern = words.slice(start, start + patternLen).join(' ');
-        let repeats = 1;
-        for (let i = start + patternLen; i + patternLen <= words.length; i += patternLen) {
-            if (words.slice(i, i + patternLen).join(' ') === pattern) {
-                repeats++;
-            } else {
+    // 2. 짧은 구절 반복 감지 (1~4단어 패턴이 4회 이상 반복)
+    let repetitionFound = false;
+    for (let patternLen = 1; patternLen <= 4 && !repetitionFound; patternLen++) {
+        if (words.length < patternLen * 4) continue;
+        for (let start = 0; start < patternLen; start++) {
+            const pattern = words.slice(start, start + patternLen).join(' ');
+            let repeats = 1;
+            for (let i = start + patternLen; i + patternLen <= words.length; i += patternLen) {
+                if (words.slice(i, i + patternLen).join(' ') === pattern) {
+                    repeats++;
+                } else {
+                    break;
+                }
+            }
+            if (repeats >= 4) {
+                console.log('반복 환청 제거 (' + repeats + '회, "' + pattern + '"):', seg.text.slice(0, 80));
+                repetitionFound = true;
                 break;
             }
         }
-        if (repeats >= 3) {
-            console.log('반복 환청 제거 (' + repeats + '회, "' + pattern + '"):', seg.text.slice(0, 80));
-            repetitionFound = true;
-            break;
-        }
     }
-}
-if (repetitionFound) return false;
+    if (repetitionFound) return false;
     
     return true;
 });
@@ -349,8 +353,10 @@ if (repetitionFound) return false;
             
             // 1. 현재 단어 조각에 문장 종결 부호가 들어있는지 1차 확인
             const hasSentenceEnd = /[.?!]["']?$|—$|--$|\.\.\.$/.test(wordTrimmed);
+const bufDuration = w.end + offsetSec - bufStart;
+const forceSplit = bufDuration >= 7;  // 7초 누적되면 강제 분할
             
-            if (hasSentenceEnd) {
+            if (hasSentenceEnd || forceSplit) {
                 // 2. 🌟 핵심: 단어 조각 하나만 보지 않고, "지금까지 버퍼에 모인 전체 텍스트"를 확인
                 const currentText = buf.map(b => b.word).join('').trim();
                 
@@ -358,7 +364,7 @@ if (repetitionFound) return false;
                 const endsWithAbbrev = /\b([A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Rev|Capt|Gen|St|Sgt|Lt|Col|Cmdr)["']?\.$/i.test(currentText);
                 
                 // 약어가 아니라면 진짜로 문장이 끝난 것이므로 쪼개기!
-                if (!endsWithAbbrev) {
+                if (!endsWithAbbrev || forceSplit) {
                     split.push({
                         start: bufStart,
                         end: w.end + offsetSec,
