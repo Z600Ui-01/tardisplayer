@@ -269,6 +269,7 @@
   </div>
   </div>
 
+  <!-- 자막 초기화 확인 모달 -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal-box" style="width: 380px;">
       <h2 class="modal-title">WARNING</h2>
@@ -279,15 +280,16 @@
         </p>
       </div>
 
-      <div class="modal-actions" style="justify-content: center; margin-top: 16px; gap: 12px;">
+      <div class="modal-actions" style="display: flex; justify-content: center; gap: 12px;">
         <button class="modal-btn cancel" id="btnKeepSubtitles">유지하기</button>
         <button class="modal-btn confirm" id="btnResetSubtitles">초기화하기</button>
       </div>
     </div>
   </div>
 
+  <!-- 저장되지 않은 자막 삭제 경고 모달 -->
   <div class="modal-overlay" id="saveWarningModal">
-    <div class="modal-box" style="width: 400px;">
+    <div class="modal-box" style="width: 420px;"> 
       <h2 class="modal-title" style="color: #d9534f;">UNSAVED SUBTITLES</h2>
       
       <div class="modal-group">
@@ -296,13 +298,12 @@
         </p>
       </div>
 
-      <div class="modal-actions" style="justify-content: center; margin-top: 16px; gap: 8px;">
+      <div class="modal-actions" style="display: flex; justify-content: center; gap: 8px;">
         <button class="modal-btn cancel" id="btnCancelWarning">작업 취소</button>
-        <button class="modal-btn cancel" id="btnDiscardSubtitles" style="color: #d9534f; border-color: #d9534f;">저장 없이 삭제</button>
+        <button class="modal-btn danger" id="btnDiscardSubtitles">저장 없이 삭제</button>
         <button class="modal-btn confirm" id="btnSaveAndProceed">저장하기</button>
       </div>
     </div>
   </div>
-</body>
 
 </html>

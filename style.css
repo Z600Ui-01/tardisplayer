@@ -583,6 +583,19 @@
   box-shadow: inset 0 0 0 1px var(--charcoal), inset 0 0 0 2px var(--cream);
 }
 
+.modal-btn.danger {
+  /* background: #d9534f; */
+  border-color: #d9534f;
+  /* color: var(--cream); */
+  background: var(--cream);
+  color: #d9534f;
+}
+
+.modal-btn.danger:hover {
+  /* box-shadow: inset 0 0 0 1px var(--charcoal), inset 0 0 0 2px var(--cream); */
+  box-shadow: inset 0 0 0 1px var(--cream), inset 0 0 0 2px #d9534f;
+}
+
 /* ── 중앙 자막 생성 버튼 디자인 ── */
 .inline-generate-btn {
   display: inline-flex;
