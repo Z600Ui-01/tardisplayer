@@ -1,3 +1,14 @@
+// 저장 상태 추적 변수
+let isUnsaved = false; 
+
+// 탭 닫기 / 새로고침 방지 (브라우저 기본 알림)
+window.addEventListener('beforeunload', (e) => {
+    if (isUnsaved) {
+        e.preventDefault();
+        e.returnValue = ''; // 크롬 등 최신 브라우저 필수 설정
+    }
+});
+
 // ── 캡처 기능 ──
 document.getElementById('screenshotBtn').addEventListener('click', () => {
     const target = document.querySelector('.window');
@@ -766,9 +777,57 @@ function updateProgress() {
     timeCurrent.textContent = fmt(audio.currentTime);
 }
 
+// ── 커스텀 컨펌 모달 로직 (Promise 사용) ──
+const confirmModal = document.getElementById('confirmModal');
+const btnKeepSubtitles = document.getElementById('btnKeepSubtitles');
+const btnResetSubtitles = document.getElementById('btnResetSubtitles');
+
+function askToResetSubtitles() {
+    return new Promise((resolve) => {
+        confirmModal.classList.add('active'); // 모달 띄우기
+
+        // '초기화하기' 클릭 시
+        btnResetSubtitles.addEventListener('click', function onClickReset() {
+            confirmModal.classList.remove('active');
+            resolve(true); // true(초기화 승인) 반환
+        }, { once: true });
+
+        // '유지하기' 클릭 시
+        btnKeepSubtitles.addEventListener('click', function onClickKeep() {
+            confirmModal.classList.remove('active');
+            resolve(false); // false(유지) 반환
+        }, { once: true });
+    });
+}
+
+// ── 오디오 파일 로드 ──
 audioInput.addEventListener('change', async e => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
+
+    if (subtitles.length > 0) {
+        // 1. 초기화 여부 먼저 묻기
+        const shouldReset = await askToResetSubtitles(); 
+        
+        if (shouldReset) {
+            console.log('현재 미저장 상태인가요?:', isUnsaved); // 디버깅용 확인
+
+            // 2. 초기화한다고 했는데, 아직 저장을 안 했다면 경고창 띄우기!
+            if (isUnsaved) {
+                const action = await askToSaveSubtitles();
+                if (action === 'cancel') {
+                    e.target.value = ''; // 오디오 불러오기 취소
+                    return; 
+                }
+            }
+            
+            // 승인 후 깔끔하게 비우기
+            subtitles = []; 
+            document.querySelector('.subtitle-area').innerHTML = ''; 
+            updateWaitingMessage(); 
+        }
+    }
+
     files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     tracks = files;
     const name = files.length > 1
@@ -871,6 +930,47 @@ audioInput.addEventListener('change', async e => {
         updateWaitingMessage();
     }
 });
+
+// ── 저장 경고 커스텀 모달 (Promise) ──
+function askToSaveSubtitles() {
+    return new Promise((resolve) => {
+        // 저장할 게 없으면 패스!
+        if (!isUnsaved || subtitles.length === 0) {
+            resolve('proceed');
+            return;
+        }
+
+        const modal = document.getElementById('saveWarningModal');
+        modal.classList.add('active');
+
+        // 깔끔하게 이벤트 정리하는 함수
+        const cleanup = () => modal.classList.remove('active');
+
+        // 1. 작업 취소 (아무것도 안 함)
+        document.getElementById('btnCancelWarning').onclick = () => {
+            cleanup();
+            resolve('cancel');
+        };
+
+        // 2. 저장 없이 삭제
+        document.getElementById('btnDiscardSubtitles').onclick = () => {
+            cleanup();
+            isUnsaved = false; // 폐기 완료
+            resolve('proceed');
+        };
+
+        // 3. 저장하기 (다운로드 창 띄우고 다음으로 진행)
+        document.getElementById('btnSaveAndProceed').onclick = () => {
+            cleanup();
+            const isSaved = exportSubtitles(); // 다운로드 실행
+            if (isSaved) {
+                resolve('proceed'); // 저장했으니 다음 단계 진행
+            } else {
+                resolve('cancel');  // 프롬프트 창에서 취소 눌렀으면 작업도 멈춤
+            }
+        };
+    });
+}
 
 audio.addEventListener('loadedmetadata', () => {
     timeTotal.textContent = fmt(audio.duration);
@@ -1109,8 +1209,8 @@ function syncLoop() {
 requestAnimationFrame(syncLoop);
 
 // ── SRT 내보내기 ──
-document.getElementById('exportSrtBtn').addEventListener('click', () => {
-    if (!subtitles.length) return;
+function exportSubtitles() {
+    if (!subtitles.length) return false;
     let srt = '';
     subtitles.forEach((sub, i) => {
         srt += (i + 1) + '\n';
@@ -1122,12 +1222,22 @@ document.getElementById('exportSrtBtn').addEventListener('click', () => {
     const blob = new Blob([srt], { type: 'text/plain' });
     const defaultName = 'subtitles_' + Date.now();
     const fileName = prompt('파일명을 입력하세요', defaultName);
-    if (fileName === null) return;
+    
+    // 취소 누르면 저장 실패로 간주
+    if (fileName === null) return false; 
+
     const link = document.createElement('a');
     link.download = (fileName || defaultName) + '.srt';
     link.href = URL.createObjectURL(blob);
     link.click();
-});
+    
+    // 저장이 성공적으로 끝나면 저장 상태를 false로 변경
+    isUnsaved = false; 
+    return true;
+}
+
+// 좌측 메뉴 SRT 내보내기 버튼 이벤트
+document.getElementById('exportSrtBtn').addEventListener('click', exportSubtitles);
 
 function secToSrtTime(sec) {
     const h = Math.floor(sec / 3600);
@@ -1138,15 +1248,25 @@ function secToSrtTime(sec) {
 }
 
 // ── SRT 파일 로드 ──
-document.getElementById('srtInput').addEventListener('change', e => {
+document.getElementById('srtInput').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
 
     if (subtitles.length > 0) {
-        const replace = confirm('기존 자막이 있습니다. 새 파일로 교체할까요?');
-        if (!replace) {
-            e.target.value = '';
-            return;
+        // 생성해 둔 미저장 자막이 있다면 경고 모달 띄우기
+        if (isUnsaved) {
+            const action = await askToSaveSubtitles();
+            if (action === 'cancel') {
+                e.target.value = '';
+                return;
+            }
+        } else {
+            // 외부에서 불러온 자막은 일반 confirm 사용
+            const replace = confirm('기존 자막이 있습니다. 새 파일로 교체할까요?');
+            if (!replace) {
+                e.target.value = '';
+                return;
+            }
         }
     }
 
@@ -1154,6 +1274,7 @@ document.getElementById('srtInput').addEventListener('change', e => {
     reader.onload = ev => {
         const subs = parseSRT(ev.target.result);
         renderSubtitles(subs);
+        isUnsaved = false; // 외부에서 로드한 파일은 이미 저장된 상태로 간주
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -1195,6 +1316,8 @@ async function runSubtitleGeneration() {
             const subs = await transcribeAll(tracks);
             const translated = await translateSubtitles(subs);
             renderSubtitles(translated);
+
+            isUnsaved = true; // 새로 생성된 자막은 아직 저장되지 않은 상태로 간주
             
             // 번역이 끝나면 타이틀바 원래 이름으로 복구
             const name = tracks.length > 1
@@ -1343,4 +1466,34 @@ document.querySelectorAll('.eye-btn').forEach(btn => {
             this.innerHTML = eyeOpenSvg;   // 눈 뜬 SVG로 교체
         }
     });
+});
+
+// ── 키보드 단축키 지원 ──
+window.addEventListener('keydown', (e) => {
+    // 1. 예외 처리: 입력창(input, textarea)에 포커스가 있을 때는 단축키 작동 방지
+    const targetTag = e.target.tagName.toLowerCase();
+    if (targetTag === 'input' || targetTag === 'textarea' || e.target.isContentEditable) {
+        return;
+    }
+
+    // 2. 예외 처리: 오디오가 아직 로드되지 않았다면 무시
+    if (!audioLoaded) return;
+
+    // 3. 키보드 입력에 따른 동작 매핑
+    switch (e.code) {
+        case 'Space':
+            e.preventDefault(); // 스페이스바 누를 때 화면이 아래로 스크롤되는 기본 동작 방지
+            btnPlay.click();    // 마우스로 플레이 버튼을 누른 것과 똑같이 동작시킴
+            break;
+            
+        case 'ArrowLeft':
+            e.preventDefault(); // 방향키 스크롤 방지
+            btnBack.click();    // -10초 버튼 클릭
+            break;
+            
+        case 'ArrowRight':
+            e.preventDefault(); // 방향키 스크롤 방지
+            btnFwd.click();     // +10초 버튼 클릭
+            break;
+    }
 });
